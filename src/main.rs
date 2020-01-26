@@ -33,6 +33,11 @@ use structopt::StructOpt;
 
 use tokio::runtime::Runtime;
 
+use tracing::subscriber::set_global_default as set_global_subscriber;
+use tracing_subscriber::filter::LevelFilter;
+use tracing_subscriber::fmt::time::ChronoLocal;
+use tracing_subscriber::FmtSubscriber;
+
 const FROM_ACCOUNT: &str = "Assets:Investments:Stock";
 const TO_ACCOUNT: &str = "Assets:Alpaca Brokerage";
 
@@ -42,6 +47,9 @@ const TO_ACCOUNT: &str = "Assets:Alpaca Brokerage";
 struct Opts {
   /// The path to the JSON registry for looking up names from symbols.
   registry: PathBuf,
+  /// Increase verbosity (can be supplied multiple times).
+  #[structopt(short = "v", long = "verbose", global = true, parse(from_occurrences))]
+  verbosity: usize,
 }
 
 
@@ -126,6 +134,19 @@ async fn activities_list(
 
 async fn run() -> Result<(), Error> {
   let opts = Opts::from_args();
+  let level = match opts.verbosity {
+    0 => LevelFilter::WARN,
+    1 => LevelFilter::INFO,
+    2 => LevelFilter::DEBUG,
+    _ => LevelFilter::TRACE,
+  };
+
+  let subscriber = FmtSubscriber::builder()
+    .with_max_level(level)
+    .with_timer(ChronoLocal::rfc3339())
+    .finish();
+
+  set_global_subscriber(subscriber).with_context(|| "failed to set tracing subscriber")?;
 
   let file = File::open(&opts.registry)
     .with_context(|| format!("failed to open registry file {}", opts.registry.display()))?;
