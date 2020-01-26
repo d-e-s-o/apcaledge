@@ -1,7 +1,10 @@
 // Copyright (C) 2020 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use std::collections::HashMap;
 use std::convert::TryInto;
+use std::env::args_os;
+use std::fs::File;
 use std::io::stdout;
 use std::io::Write;
 use std::process::exit;
@@ -14,6 +17,7 @@ use apca::api::v2::account_activities;
 use apca::ApiInfo;
 use apca::Client;
 
+use anyhow::anyhow;
 use anyhow::Context;
 use anyhow::Error;
 
@@ -22,6 +26,8 @@ use chrono::offset::Utc;
 use chrono::DateTime;
 
 use num_decimal::Num;
+
+use serde_json::from_reader as json_from_reader;
 
 use tokio::runtime::Runtime;
 
@@ -50,7 +56,7 @@ fn format_date(time: &SystemTime) -> String {
     .unwrap()
 }
 
-fn print_trade(trade: &account_activities::TradeActivity, currency: &str) {
+fn print_trade(trade: &account_activities::TradeActivity, name: &str, currency: &str) {
   let multiplier = match trade.side {
     account_activities::Side::Buy => 1,
     account_activities::Side::Sell => -1,
@@ -62,7 +68,7 @@ fn print_trade(trade: &account_activities::TradeActivity, currency: &str) {
   {to:<51}    {total:>15}
 "#,
     date = format_date(&trade.transaction_time),
-    name = trade.symbol,
+    name = name,
     from = FROM_ACCOUNT,
     to = TO_ACCOUNT,
     qty = trade.quantity as i32 * multiplier,
@@ -75,7 +81,10 @@ fn print_trade(trade: &account_activities::TradeActivity, currency: &str) {
   );
 }
 
-async fn activities_list(client: &mut Client) -> Result<(), Error> {
+async fn activities_list(
+  client: &mut Client,
+  registry: &HashMap<String, String>,
+) -> Result<(), Error> {
   let request = account_activities::ActivityReq {
     types: Some(vec![account_activities::ActivityType::Fill]),
   };
@@ -91,7 +100,13 @@ async fn activities_list(client: &mut Client) -> Result<(), Error> {
 
   for activity in activities {
     match activity {
-      account_activities::Activity::Trade(trade) => print_trade(&trade, &currency),
+      account_activities::Activity::Trade(trade) => {
+        let name = registry
+          .get(&trade.symbol)
+          .ok_or_else(|| anyhow!("symbol {} not present in registry", trade.symbol))?;
+
+        print_trade(&trade, &name, &currency)
+      },
       account_activities::Activity::NonTrade(..) => (),
     }
   }
@@ -99,11 +114,24 @@ async fn activities_list(client: &mut Client) -> Result<(), Error> {
 }
 
 async fn run() -> Result<(), Error> {
+  let mut it = args_os();
+  let registry = match it.len() {
+    2 => {
+      let path = it.nth(1).unwrap();
+      let file = File::open(&path)
+        .with_context(|| format!("failed to open registry file {}", path.to_str().unwrap()))?;
+      let registry = json_from_reader::<_, HashMap<String, String>>(file)
+        .with_context(|| format!("failed to read registry {}", path.to_str().unwrap()))?;
+      registry
+    },
+    _ => return Err(anyhow!("please provide the path to a JSON registry")),
+  };
+
   let api_info =
     ApiInfo::from_env().with_context(|| "failed to retrieve Alpaca environment information")?;
   let mut client = Client::new(api_info);
 
-  activities_list(&mut client).await
+  activities_list(&mut client, &registry).await
 }
 
 fn main() {
