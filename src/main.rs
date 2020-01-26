@@ -3,10 +3,10 @@
 
 use std::collections::HashMap;
 use std::convert::TryInto;
-use std::env::args_os;
 use std::fs::File;
 use std::io::stdout;
 use std::io::Write;
+use std::path::PathBuf;
 use std::process::exit;
 use std::time::SystemTime;
 use std::time::SystemTimeError;
@@ -29,10 +29,21 @@ use num_decimal::Num;
 
 use serde_json::from_reader as json_from_reader;
 
+use structopt::StructOpt;
+
 use tokio::runtime::Runtime;
 
 const FROM_ACCOUNT: &str = "Assets:Investments:Stock";
 const TO_ACCOUNT: &str = "Assets:Alpaca Brokerage";
+
+
+/// A command line client for formatting Alpaca trades in Ledger format.
+#[derive(Debug, StructOpt)]
+struct Opts {
+  /// The path to the JSON registry for looking up names from symbols.
+  registry: PathBuf,
+}
+
 
 /// Format a price value.
 fn format_price(price: &Num, currency: &str) -> String {
@@ -114,18 +125,12 @@ async fn activities_list(
 }
 
 async fn run() -> Result<(), Error> {
-  let mut it = args_os();
-  let registry = match it.len() {
-    2 => {
-      let path = it.nth(1).unwrap();
-      let file = File::open(&path)
-        .with_context(|| format!("failed to open registry file {}", path.to_str().unwrap()))?;
-      let registry = json_from_reader::<_, HashMap<String, String>>(file)
-        .with_context(|| format!("failed to read registry {}", path.to_str().unwrap()))?;
-      registry
-    },
-    _ => return Err(anyhow!("please provide the path to a JSON registry")),
-  };
+  let opts = Opts::from_args();
+
+  let file = File::open(&opts.registry)
+    .with_context(|| format!("failed to open registry file {}", opts.registry.display()))?;
+  let registry = json_from_reader::<_, HashMap<String, String>>(file)
+    .with_context(|| format!("failed to read registry {}", opts.registry.display()))?;
 
   let api_info =
     ApiInfo::from_env().with_context(|| "failed to retrieve Alpaca environment information")?;
