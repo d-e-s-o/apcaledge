@@ -55,7 +55,9 @@ struct Opts {
 
 /// Format a price value.
 fn format_price(price: &Num, currency: &str) -> String {
-  format!("{:.2} {}", price, currency)
+  // We would like to ensure emitting prices with at least two post
+  // decimal positions, for consistency.
+  format!("{} {}", price.display().min_precision(2), currency)
 }
 
 /// Convert a `SystemTime` into a `DateTime`.
