@@ -3,6 +3,8 @@
 apcaledge
 =========
 
+- [Changelog](CHANGELOG.md)
+
 **apcaledge** is an application for exporting trading activity from
 Alpaca at [alpaca.markets][] in a [Ledger CLI][ledger-cli] compatible
 format.

@@ -73,7 +73,7 @@ fn convert_time(time: &SystemTime) -> Result<DateTime<Utc>, SystemTimeError> {
 /// Format a system time as a date.
 fn format_date(time: &SystemTime) -> String {
   convert_time(time)
-    .map(|time| time.date().format("%Y/%m/%d").to_string().into())
+    .map(|time| time.date().format("%Y-%m-%d").to_string().into())
     .unwrap()
 }
 
