@@ -19,7 +19,7 @@ use apca::Client;
 
 use anyhow::anyhow;
 use anyhow::Context;
-use anyhow::Error;
+use anyhow::Result;
 
 use chrono::offset::TimeZone;
 use chrono::offset::Utc;
@@ -105,7 +105,7 @@ fn print_trade(trade: &account_activities::TradeActivity, name: &str, currency: 
 async fn activities_list(
   client: &mut Client,
   registry: &HashMap<String, String>,
-) -> Result<(), Error> {
+) -> Result<()> {
   let request = account_activities::ActivityReq {
     types: Some(vec![account_activities::ActivityType::Fill]),
   };
@@ -134,7 +134,7 @@ async fn activities_list(
   Ok(())
 }
 
-async fn run() -> Result<(), Error> {
+async fn run() -> Result<()> {
   let opts = Opts::from_args();
   let level = match opts.verbosity {
     0 => LevelFilter::WARN,
