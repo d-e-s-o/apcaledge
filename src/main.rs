@@ -77,7 +77,15 @@ fn format_date(time: &SystemTime) -> String {
     .unwrap()
 }
 
-fn print_trade(trade: &account_activities::TradeActivity, name: &str, currency: &str) {
+fn print_trade(
+  trade: &account_activities::TradeActivity,
+  registry: &HashMap<String, String>,
+  currency: &str,
+) -> Result<()> {
+  let name = registry
+    .get(&trade.symbol)
+    .ok_or_else(|| anyhow!("symbol {} not present in registry", trade.symbol))?;
+
   let multiplier = match trade.side {
     account_activities::Side::Buy => 1,
     account_activities::Side::Sell => -1,
@@ -100,6 +108,7 @@ fn print_trade(trade: &account_activities::TradeActivity, name: &str, currency: 
       &currency
     ),
   );
+  Ok(())
 }
 
 async fn activities_list(
@@ -121,13 +130,7 @@ async fn activities_list(
 
   for activity in activities {
     match activity {
-      account_activities::Activity::Trade(trade) => {
-        let name = registry
-          .get(&trade.symbol)
-          .ok_or_else(|| anyhow!("symbol {} not present in registry", trade.symbol))?;
-
-        print_trade(&trade, &name, &currency)
-      },
+      account_activities::Activity::Trade(trade) => print_trade(&trade, registry, &currency)?,
       account_activities::Activity::NonTrade(..) => (),
     }
   }
