@@ -1,3 +1,11 @@
+Unreleased
+----------
+- Added support for emitting entries for the following non-trade
+  activities:
+  - Dividends
+  - Pass-through charges
+
+
 0.1.1
 -----
 - Changed date format used from `%Y/%m/%d` to `%Y-%m-%d`

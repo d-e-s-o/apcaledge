@@ -1,6 +1,7 @@
 // Copyright (C) 2020 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fs::File;
@@ -38,6 +39,7 @@ use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::fmt::time::ChronoLocal;
 use tracing_subscriber::FmtSubscriber;
 
+const ALPACA: &str = "Alpaca Securities LLC";
 const FROM_ACCOUNT: &str = "Assets:Investments:Stock";
 const TO_ACCOUNT: &str = "Assets:Alpaca Brokerage";
 
@@ -111,6 +113,58 @@ fn print_trade(
   Ok(())
 }
 
+fn print_non_trade(
+  non_trade: &account_activities::NonTradeActivity,
+  registry: &HashMap<String, String>,
+  currency: &str,
+) -> Result<()> {
+  match non_trade.type_ {
+    account_activities::ActivityType::Dividend => {
+      let symbol = non_trade
+        .symbol
+        .as_ref()
+        .ok_or_else(|| anyhow!("dividend entry does not have an associated symbol"))?;
+      let name = registry
+        .get(symbol)
+        .ok_or_else(|| anyhow!("symbol {} not present in registry", symbol))?;
+
+      println!(
+        r#"{date} * {name}
+  {from:<51}
+  {to:<51}    {total:>15}
+"#,
+        date = format_date(&non_trade.date),
+        name = name,
+        from = "Income:Dividend",
+        to = TO_ACCOUNT,
+        total = format_price(&non_trade.net_amount, currency),
+      );
+    },
+    account_activities::ActivityType::PassThruCharge => {
+      let desc = non_trade
+        .description
+        .as_ref()
+        .map(|desc| format!("\n  ; {}", desc).into())
+        .unwrap_or_else(|| Cow::from(""));
+
+      println!(
+        r#"{date} * {name}{desc}
+  {from:<51}
+  {to:<51}    {total:>15}
+"#,
+        date = format_date(&non_trade.date),
+        name = ALPACA,
+        desc = desc,
+        from = "Expenses:Broker:Fee",
+        to = TO_ACCOUNT,
+        total = format_price(&non_trade.net_amount, currency),
+      );
+    },
+    _ => (),
+  }
+  Ok(())
+}
+
 async fn activities_list(
   client: &mut Client,
   registry: &HashMap<String, String>,
@@ -131,7 +185,9 @@ async fn activities_list(
   for activity in activities {
     match activity {
       account_activities::Activity::Trade(trade) => print_trade(&trade, registry, &currency)?,
-      account_activities::Activity::NonTrade(..) => (),
+      account_activities::Activity::NonTrade(non_trade) => {
+        print_non_trade(&non_trade, registry, &currency)?
+      },
     }
   }
   Ok(())
