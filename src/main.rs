@@ -116,7 +116,7 @@ async fn activities_list(
   registry: &HashMap<String, String>,
 ) -> Result<()> {
   let request = account_activities::ActivityReq {
-    types: Some(vec![account_activities::ActivityType::Fill]),
+    types: None,
   };
   let currency = client
     .issue::<account::Get>(())
