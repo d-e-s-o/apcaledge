@@ -40,7 +40,7 @@ use tracing_subscriber::fmt::time::ChronoLocal;
 use tracing_subscriber::FmtSubscriber;
 
 const ALPACA: &str = "Alpaca Securities LLC";
-const FROM_ACCOUNT: &str = "Assets:Investments:Stock";
+const FROM_ACCOUNT: &str = "Assets:Investments:Alpaca:Stock";
 const TO_ACCOUNT: &str = "Assets:Alpaca Brokerage";
 
 
