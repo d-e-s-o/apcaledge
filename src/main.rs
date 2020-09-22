@@ -40,8 +40,8 @@ use tracing_subscriber::fmt::time::ChronoLocal;
 use tracing_subscriber::FmtSubscriber;
 
 const ALPACA: &str = "Alpaca Securities LLC";
-const FROM_ACCOUNT: &str = "Assets:Investments:Alpaca:Stock";
-const TO_ACCOUNT: &str = "Assets:Alpaca Brokerage";
+const DEFAULT_INVESTMENT_ACCOUNT: &str = "Assets:Investments:Alpaca:Stock";
+const DEFAULT_BROKERAGE_ACCOUNT: &str = "Assets:Alpaca Brokerage";
 
 
 /// A command line client for formatting Alpaca trades in Ledger format.
@@ -49,6 +49,14 @@ const TO_ACCOUNT: &str = "Assets:Alpaca Brokerage";
 struct Opts {
   /// The path to the JSON registry for looking up names from symbols.
   registry: PathBuf,
+  /// The name of the investment account, i.e., the one holding the
+  /// shares.
+  #[structopt(long, default_value = DEFAULT_INVESTMENT_ACCOUNT)]
+  investment_account: String,
+  /// The name of the brokerage account, i.e., the one holding any
+  /// uninvested cash.
+  #[structopt(long, default_value = DEFAULT_BROKERAGE_ACCOUNT)]
+  brokerage_account: String,
   /// Increase verbosity (can be supplied multiple times).
   #[structopt(short = "v", long = "verbose", global = true, parse(from_occurrences))]
   verbosity: usize,
@@ -81,6 +89,8 @@ fn format_date(time: &SystemTime) -> String {
 
 fn print_trade(
   trade: &account_activities::TradeActivity,
+  investment_account: &str,
+  brokerage_account: &str,
   registry: &HashMap<String, String>,
   currency: &str,
 ) -> Result<()> {
@@ -100,8 +110,8 @@ fn print_trade(
 "#,
     date = format_date(&trade.transaction_time),
     name = name,
-    from = FROM_ACCOUNT,
-    to = TO_ACCOUNT,
+    from = investment_account,
+    to = brokerage_account,
     qty = trade.quantity as i32 * multiplier,
     sym = trade.symbol,
     price = format_price(&trade.price, &currency),
@@ -115,6 +125,7 @@ fn print_trade(
 
 fn print_non_trade(
   non_trade: &account_activities::NonTradeActivity,
+  brokerage_account: &str,
   registry: &HashMap<String, String>,
   currency: &str,
 ) -> Result<()> {
@@ -136,7 +147,7 @@ fn print_non_trade(
         date = format_date(&non_trade.date),
         name = name,
         from = "Income:Dividend",
-        to = TO_ACCOUNT,
+        to = brokerage_account,
         total = format_price(&non_trade.net_amount, currency),
       );
     },
@@ -156,7 +167,7 @@ fn print_non_trade(
         name = ALPACA,
         desc = desc,
         from = "Expenses:Broker:Fee",
-        to = TO_ACCOUNT,
+        to = brokerage_account,
         total = format_price(&non_trade.net_amount, currency),
       );
     },
@@ -167,6 +178,8 @@ fn print_non_trade(
 
 async fn activities_list(
   client: &mut Client,
+  investment_account: &str,
+  brokerage_account: &str,
   registry: &HashMap<String, String>,
 ) -> Result<()> {
   let request = account_activities::ActivityReq {
@@ -184,9 +197,15 @@ async fn activities_list(
 
   for activity in activities {
     match activity {
-      account_activities::Activity::Trade(trade) => print_trade(&trade, registry, &currency)?,
+      account_activities::Activity::Trade(trade) => print_trade(
+        &trade,
+        investment_account,
+        brokerage_account,
+        registry,
+        &currency,
+      )?,
       account_activities::Activity::NonTrade(non_trade) => {
-        print_non_trade(&non_trade, registry, &currency)?
+        print_non_trade(&non_trade, brokerage_account, registry, &currency)?
       },
     }
   }
@@ -218,7 +237,13 @@ async fn run() -> Result<()> {
     ApiInfo::from_env().with_context(|| "failed to retrieve Alpaca environment information")?;
   let mut client = Client::new(api_info);
 
-  activities_list(&mut client, &registry).await
+  activities_list(
+    &mut client,
+    &opts.investment_account,
+    &opts.brokerage_account,
+    &registry,
+  )
+  .await
 }
 
 fn main() {

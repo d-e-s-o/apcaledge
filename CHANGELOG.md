@@ -4,6 +4,8 @@ Unreleased
   activities:
   - Dividends
   - Pass-through charges
+- Made investment and brokerage account names configurable through
+  program options
 
 
 0.1.1
