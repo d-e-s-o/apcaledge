@@ -19,7 +19,7 @@ A command line tool for exporting trading activity from Alpaca
 """
 
 [dependencies]
-apca = {version = "0.15", default-features = false}
+apca = {version = "0.16", default-features = false}
 anyhow = {version = "1.0", default-features = false, features = ["std"]}
 chrono = {version = "0.4", default-features = false}
 num-decimal = {version = "0.2.1", default-features = false}

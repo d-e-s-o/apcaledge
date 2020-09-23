@@ -6,6 +6,7 @@ Unreleased
   - Pass-through charges
 - Made investment and brokerage account names configurable through
   program options
+- Bumped `apca` dependency to `0.16`
 
 
 0.1.1
