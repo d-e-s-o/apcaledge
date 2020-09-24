@@ -1,5 +1,5 @@
-Unreleased
-----------
+0.1.2
+-----
 - Added support for emitting entries for the following non-trade
   activities:
   - Dividends
