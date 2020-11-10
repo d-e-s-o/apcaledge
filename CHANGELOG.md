@@ -1,3 +1,8 @@
+Unreleased
+----------
+- Print more recent activity data at the bottom
+
+
 0.1.2
 -----
 - Added support for emitting entries for the following non-trade

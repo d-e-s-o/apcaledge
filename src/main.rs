@@ -195,7 +195,7 @@ async fn activities_list(
     .await
     .with_context(|| "failed to retrieve account activities")?;
 
-  for activity in activities {
+  for activity in activities.into_iter().rev() {
     match activity {
       account_activities::Activity::Trade(trade) => print_trade(
         &trade,
