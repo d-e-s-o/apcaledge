@@ -19,12 +19,12 @@ A command line tool for exporting trading activity from Alpaca
 """
 
 [dependencies]
-apca = {version = "0.16", default-features = false}
+apca = {version = "0.17", default-features = false}
 anyhow = {version = "1.0", default-features = false, features = ["std"]}
 chrono = {version = "0.4", default-features = false}
 num-decimal = {version = "0.2.1", default-features = false}
 serde_json = {version = "1.0", default-features = false}
 structopt = {version = "0.3", default-features = false}
-tokio = {version = "0.2", default-features = false, features = ["rt-core"]}
+tokio = {version = "1.0", default-features = false, features = ["rt"]}
 tracing = {version = "0.1", default-features = false, features = ["std"]}
 tracing-subscriber = {version = "0.2", default-features = false, features = ["ansi", "chrono", "env-filter", "fmt"]}

@@ -1,4 +1,4 @@
-// Copyright (C) 2020 Daniel Mueller <deso@posteo.net>
+// Copyright (C) 2020-2021 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::borrow::Cow;
@@ -32,7 +32,7 @@ use serde_json::from_reader as json_from_reader;
 
 use structopt::StructOpt;
 
-use tokio::runtime::Runtime;
+use tokio::runtime::Builder;
 
 use tracing::subscriber::set_global_default as set_global_subscriber;
 use tracing_subscriber::filter::LevelFilter;
@@ -247,7 +247,7 @@ async fn run() -> Result<()> {
 }
 
 fn main() {
-  let mut rt = Runtime::new().unwrap();
+  let rt = Builder::new_current_thread().enable_io().build().unwrap();
   let exit_code = rt
     .block_on(run())
     .map(|_| 0)
