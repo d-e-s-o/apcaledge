@@ -182,9 +182,7 @@ async fn activities_list(
   brokerage_account: &str,
   registry: &HashMap<String, String>,
 ) -> Result<()> {
-  let request = account_activities::ActivityReq {
-    types: None,
-  };
+  let request = account_activities::ActivityReq::default();
   let currency = client
     .issue::<account::Get>(())
     .await

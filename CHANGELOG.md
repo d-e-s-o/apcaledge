@@ -1,7 +1,7 @@
 Unreleased
 ----------
 - Print more recent activity data at the bottom
-- Bumped `apca` dependency to `0.17`
+- Bumped `apca` dependency to `0.18`
 - Bumped `tokio` dependency to `1.0`
 
 
