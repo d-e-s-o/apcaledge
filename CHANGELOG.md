@@ -1,5 +1,6 @@
 Unreleased
 ----------
+- Added support paging through all account activities
 - Print more recent activity data at the bottom
 - Bumped `apca` dependency to `0.18`
 - Bumped `tokio` dependency to `1.0`

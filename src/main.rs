@@ -182,29 +182,42 @@ async fn activities_list(
   brokerage_account: &str,
   registry: &HashMap<String, String>,
 ) -> Result<()> {
-  let request = account_activities::ActivityReq::default();
+  let mut request = account_activities::ActivityReq {
+    direction: account_activities::Direction::Ascending,
+    ..Default::default()
+  };
+
   let currency = client
     .issue::<account::Get>(())
     .await
     .with_context(|| "failed to retrieve account information")?
     .currency;
-  let activities = client
-    .issue::<account_activities::Get>(request)
-    .await
-    .with_context(|| "failed to retrieve account activities")?;
 
-  for activity in activities.into_iter().rev() {
-    match activity {
-      account_activities::Activity::Trade(trade) => print_trade(
-        &trade,
-        investment_account,
-        brokerage_account,
-        registry,
-        &currency,
-      )?,
-      account_activities::Activity::NonTrade(non_trade) => {
-        print_non_trade(&non_trade, brokerage_account, registry, &currency)?
-      },
+  loop {
+    let activities = client
+      .issue::<account_activities::Get>(request.clone())
+      .await
+      .with_context(|| "failed to retrieve account activities")?;
+
+    if let Some(last) = activities.last() {
+      request.page_token = Some(last.id().to_string());
+    } else {
+      break
+    }
+
+    for activity in activities {
+      match activity {
+        account_activities::Activity::Trade(trade) => print_trade(
+          &trade,
+          investment_account,
+          brokerage_account,
+          registry,
+          &currency,
+        )?,
+        account_activities::Activity::NonTrade(non_trade) => {
+          print_non_trade(&non_trade, brokerage_account, registry, &currency)?
+        },
+      }
     }
   }
   Ok(())
