@@ -32,6 +32,8 @@ use serde_json::from_reader as json_from_reader;
 
 use structopt::StructOpt;
 
+use time_util::parse_system_time_from_date_str;
+
 use tokio::runtime::Builder;
 
 use tracing::subscriber::set_global_default as set_global_subscriber;
@@ -44,11 +46,21 @@ const DEFAULT_INVESTMENT_ACCOUNT: &str = "Assets:Investments:Alpaca:Stock";
 const DEFAULT_BROKERAGE_ACCOUNT: &str = "Assets:Alpaca Brokerage";
 
 
+/// Parse a `SystemTime` from a provided date.
+fn parse_date(date: &str) -> Result<SystemTime> {
+  parse_system_time_from_date_str(date).ok_or_else(|| anyhow!("{} is not a valid date", date))
+}
+
+
 /// A command line client for formatting Alpaca trades in Ledger format.
 #[derive(Debug, StructOpt)]
 struct Opts {
   /// The path to the JSON registry for looking up names from symbols.
   registry: PathBuf,
+  /// Only show activities dated at the given date or after (format:
+  /// yyyy-mm-dd).
+  #[structopt(short, long, parse(try_from_str = parse_date))]
+  begin: Option<SystemTime>,
   /// The name of the investment account, i.e., the one holding the
   /// shares.
   #[structopt(long, default_value = DEFAULT_INVESTMENT_ACCOUNT)]
@@ -178,12 +190,14 @@ fn print_non_trade(
 
 async fn activities_list(
   client: &mut Client,
+  begin: Option<SystemTime>,
   investment_account: &str,
   brokerage_account: &str,
   registry: &HashMap<String, String>,
 ) -> Result<()> {
   let mut request = account_activities::ActivityReq {
     direction: account_activities::Direction::Ascending,
+    after: begin,
     ..Default::default()
   };
 
@@ -250,6 +264,7 @@ async fn run() -> Result<()> {
 
   activities_list(
     &mut client,
+    opts.begin,
     &opts.investment_account,
     &opts.brokerage_account,
     &registry,

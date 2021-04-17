@@ -1,6 +1,8 @@
 Unreleased
 ----------
 - Added support paging through all account activities
+  - Introduced `--begin` option to control which date to start reporting
+    at
 - Print more recent activity data at the bottom
 - Bumped `apca` dependency to `0.18`
 - Bumped `tokio` dependency to `1.0`
