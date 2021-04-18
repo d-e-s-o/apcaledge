@@ -1,5 +1,5 @@
-Unreleased
-----------
+0.2.0
+-----
 - Added support paging through all account activities
   - Introduced `--begin` option to control which date to start reporting
     at
