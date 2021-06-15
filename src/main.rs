@@ -44,6 +44,7 @@ use tracing_subscriber::FmtSubscriber;
 const ALPACA: &str = "Alpaca Securities LLC";
 const DEFAULT_INVESTMENT_ACCOUNT: &str = "Assets:Investments:Alpaca:Stock";
 const DEFAULT_BROKERAGE_ACCOUNT: &str = "Assets:Alpaca Brokerage";
+const DEFAULT_DIVIDEND_ACCOUNT: &str = "Income:Dividend";
 
 
 /// Parse a `SystemTime` from a provided date.
@@ -69,6 +70,9 @@ struct Opts {
   /// uninvested cash.
   #[structopt(long, default_value = DEFAULT_BROKERAGE_ACCOUNT)]
   brokerage_account: String,
+  /// The name of the account to account dividend payments against.
+  #[structopt(long, default_value = DEFAULT_DIVIDEND_ACCOUNT)]
+  dividend_account: String,
   /// Increase verbosity (can be supplied multiple times).
   #[structopt(short = "v", long = "verbose", global = true, parse(from_occurrences))]
   verbosity: usize,
@@ -138,6 +142,7 @@ fn print_trade(
 fn print_non_trade(
   non_trade: &account_activities::NonTradeActivity,
   brokerage_account: &str,
+  dividend_account: &str,
   registry: &HashMap<String, String>,
   currency: &str,
 ) -> Result<()> {
@@ -158,7 +163,7 @@ fn print_non_trade(
 "#,
         date = format_date(&non_trade.date),
         name = name,
-        from = "Income:Dividend",
+        from = dividend_account,
         to = brokerage_account,
         total = format_price(&non_trade.net_amount, currency),
       );
@@ -193,6 +198,7 @@ async fn activities_list(
   begin: Option<SystemTime>,
   investment_account: &str,
   brokerage_account: &str,
+  dividend_account: &str,
   registry: &HashMap<String, String>,
 ) -> Result<()> {
   let mut request = account_activities::ActivityReq {
@@ -228,9 +234,13 @@ async fn activities_list(
           registry,
           &currency,
         )?,
-        account_activities::Activity::NonTrade(non_trade) => {
-          print_non_trade(&non_trade, brokerage_account, registry, &currency)?
-        },
+        account_activities::Activity::NonTrade(non_trade) => print_non_trade(
+          &non_trade,
+          brokerage_account,
+          dividend_account,
+          registry,
+          &currency,
+        )?,
       }
     }
   }
@@ -267,6 +277,7 @@ async fn run() -> Result<()> {
     opts.begin,
     &opts.investment_account,
     &opts.brokerage_account,
+    &opts.dividend_account,
     &registry,
   )
   .await

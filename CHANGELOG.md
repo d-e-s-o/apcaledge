@@ -1,5 +1,6 @@
 Unreleased
 ----------
+- Made dividend account name to use configurable
 - Bumped `apca` dependency to `0.19`
 
 
