@@ -1,3 +1,8 @@
+Unreleased
+----------
+- Bumped `apca` dependency to `0.19`
+
+
 0.2.0
 -----
 - Added support paging through all account activities

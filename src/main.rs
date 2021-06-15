@@ -202,14 +202,14 @@ async fn activities_list(
   };
 
   let currency = client
-    .issue::<account::Get>(())
+    .issue::<account::Get>(&())
     .await
     .with_context(|| "failed to retrieve account information")?
     .currency;
 
   loop {
     let activities = client
-      .issue::<account_activities::Get>(request.clone())
+      .issue::<account_activities::Get>(&request)
       .await
       .with_context(|| "failed to retrieve account activities")?;
 
