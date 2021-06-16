@@ -44,6 +44,7 @@ use tracing_subscriber::FmtSubscriber;
 const ALPACA: &str = "Alpaca Securities LLC";
 const DEFAULT_INVESTMENT_ACCOUNT: &str = "Assets:Investments:Alpaca:Stock";
 const DEFAULT_BROKERAGE_ACCOUNT: &str = "Assets:Alpaca Brokerage";
+const DEFAULT_BROKERAGE_FEE_ACCOUNT: &str = "Expenses:Broker:Fee";
 const DEFAULT_DIVIDEND_ACCOUNT: &str = "Income:Dividend";
 
 
@@ -70,6 +71,9 @@ struct Opts {
   /// uninvested cash.
   #[structopt(long, default_value = DEFAULT_BROKERAGE_ACCOUNT)]
   brokerage_account: String,
+  /// The name of the brokerage's fee account.
+  #[structopt(long, default_value = DEFAULT_BROKERAGE_FEE_ACCOUNT)]
+  brokerage_fee_account: String,
   /// The name of the account to account dividend payments against.
   #[structopt(long, default_value = DEFAULT_DIVIDEND_ACCOUNT)]
   dividend_account: String,
@@ -142,6 +146,7 @@ fn print_trade(
 fn print_non_trade(
   non_trade: &account_activities::NonTradeActivity,
   brokerage_account: &str,
+  brokerage_fee_account: &str,
   dividend_account: &str,
   registry: &HashMap<String, String>,
   currency: &str,
@@ -183,7 +188,7 @@ fn print_non_trade(
         date = format_date(&non_trade.date),
         name = ALPACA,
         desc = desc,
-        from = "Expenses:Broker:Fee",
+        from = brokerage_fee_account,
         to = brokerage_account,
         total = format_price(&non_trade.net_amount, currency),
       );
@@ -198,6 +203,7 @@ async fn activities_list(
   begin: Option<SystemTime>,
   investment_account: &str,
   brokerage_account: &str,
+  brokerage_fee_account: &str,
   dividend_account: &str,
   registry: &HashMap<String, String>,
 ) -> Result<()> {
@@ -237,6 +243,7 @@ async fn activities_list(
         account_activities::Activity::NonTrade(non_trade) => print_non_trade(
           &non_trade,
           brokerage_account,
+          brokerage_fee_account,
           dividend_account,
           registry,
           &currency,
@@ -277,6 +284,7 @@ async fn run() -> Result<()> {
     opts.begin,
     &opts.investment_account,
     &opts.brokerage_account,
+    &opts.brokerage_fee_account,
     &opts.dividend_account,
     &registry,
   )

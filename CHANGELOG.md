@@ -1,6 +1,6 @@
 Unreleased
 ----------
-- Made dividend account name to use configurable
+- Made dividend and brokerage fee account names to use configurable
 - Bumped `apca` dependency to `0.19`
 
 
