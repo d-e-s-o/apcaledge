@@ -19,6 +19,7 @@ use apca::ApiInfo;
 use apca::Client;
 
 use anyhow::anyhow;
+use anyhow::bail;
 use anyhow::Context;
 use anyhow::Result;
 
@@ -46,6 +47,8 @@ const DEFAULT_INVESTMENT_ACCOUNT: &str = "Assets:Investments:Alpaca:Stock";
 const DEFAULT_BROKERAGE_ACCOUNT: &str = "Assets:Alpaca Brokerage";
 const DEFAULT_BROKERAGE_FEE_ACCOUNT: &str = "Expenses:Broker:Fee";
 const DEFAULT_DIVIDEND_ACCOUNT: &str = "Income:Dividend";
+const DEFAULT_SEC_FEE_ACCOUNT: &str = "Expenses:Broker:SEC Fee";
+const DEFAULT_FINRA_TAF_ACCOUNT: &str = "Expenses:Broker:FINRA TAF";
 
 
 /// Parse a `SystemTime` from a provided date.
@@ -77,6 +80,12 @@ struct Opts {
   /// The name of the account to account dividend payments against.
   #[structopt(long, default_value = DEFAULT_DIVIDEND_ACCOUNT)]
   dividend_account: String,
+  /// The name of the account to use for regulatory fees by the SEC.
+  #[structopt(long, default_value = DEFAULT_SEC_FEE_ACCOUNT)]
+  sec_fee_account: String,
+  /// The name of the account to use for FINRA trade activity fees.
+  #[structopt(long, default_value = DEFAULT_FINRA_TAF_ACCOUNT)]
+  finra_taf_account: String,
   /// Increase verbosity (can be supplied multiple times).
   #[structopt(short = "v", long = "verbose", global = true, parse(from_occurrences))]
   verbosity: usize,
@@ -148,6 +157,8 @@ fn print_non_trade(
   brokerage_account: &str,
   brokerage_fee_account: &str,
   dividend_account: &str,
+  sec_fee_account: &str,
+  finra_taf_account: &str,
   registry: &HashMap<String, String>,
   currency: &str,
 ) -> Result<()> {
@@ -193,6 +204,36 @@ fn print_non_trade(
         total = format_price(&non_trade.net_amount, currency),
       );
     },
+    account_activities::ActivityType::Fee => {
+      let desc = non_trade
+        .description
+        .as_ref()
+        .map(String::as_ref)
+        .unwrap_or_else(|| "");
+
+      let to = if desc.starts_with("TAF fee") {
+        finra_taf_account
+      } else if desc.starts_with("REG fee") {
+        sec_fee_account
+      } else {
+        bail!(
+          "failed to classify fee account activity with description: {}",
+          desc
+        )
+      };
+
+      println!(
+        r#"{date} * {name}
+  ; {desc}
+  {to:<51}    {total:>15}
+"#,
+        date = format_date(&non_trade.date),
+        name = ALPACA,
+        desc = desc,
+        to = to,
+        total = format_price(&-&non_trade.net_amount, currency),
+      );
+    },
     _ => (),
   }
   Ok(())
@@ -205,6 +246,8 @@ async fn activities_list(
   brokerage_account: &str,
   brokerage_fee_account: &str,
   dividend_account: &str,
+  sec_fee_account: &str,
+  finra_taf_account: &str,
   registry: &HashMap<String, String>,
 ) -> Result<()> {
   let mut request = account_activities::ActivityReq {
@@ -245,6 +288,8 @@ async fn activities_list(
           brokerage_account,
           brokerage_fee_account,
           dividend_account,
+          sec_fee_account,
+          finra_taf_account,
           registry,
           &currency,
         )?,
@@ -286,6 +331,8 @@ async fn run() -> Result<()> {
     &opts.brokerage_account,
     &opts.brokerage_fee_account,
     &opts.dividend_account,
+    &opts.sec_fee_account,
+    &opts.finra_taf_account,
     &registry,
   )
   .await
