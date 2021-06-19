@@ -3,6 +3,7 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::convert::TryInto;
 use std::fs::File;
 use std::io::stdout;
@@ -239,6 +240,68 @@ fn print_non_trade(
   Ok(())
 }
 
+
+/// Retrieve the time stamp at which an account activity occurred.
+fn time(activity: &account_activities::Activity) -> SystemTime {
+  match activity {
+    account_activities::Activity::Trade(trade) => trade.transaction_time,
+    account_activities::Activity::NonTrade(non_trade) => non_trade.date,
+  }
+}
+
+
+/// Retrieve account activities spanning at least one day.
+async fn activites_for_a_day(
+  client: &mut Client,
+  mut activities: VecDeque<account_activities::Activity>,
+  mut request: account_activities::ActivityReq,
+) -> Result<(
+  account_activities::ActivityReq,
+  VecDeque<account_activities::Activity>,
+  VecDeque<account_activities::Activity>,
+)> {
+  loop {
+    if let Some(last) = activities.back() {
+      // If we have a last element we must have a first one, so it's
+      // fine to unwrap.
+      let first = activities.front().unwrap();
+      // TODO: We should use apca::account_activities::Activity::time
+      //       once it's released.
+      let start = DateTime::<Utc>::from(time(first)).date();
+      let end = DateTime::<Utc>::from(time(last)).date();
+
+      if start != end {
+        // The date changed between the first and the last activity,
+        // meaning that we encountered activities for another day. As
+        // such, report the activities collected so far.
+        let (same_day, other_day) = activities
+          .into_iter()
+          .partition(|activity| DateTime::<Utc>::from(time(activity)).date() == start);
+
+        break Ok((request, same_day, other_day))
+      }
+    }
+
+    let fetched = client
+      .issue::<account_activities::Get>(&request)
+      .await
+      .with_context(|| "failed to retrieve account activities")?;
+
+    if let Some(last) = fetched.last() {
+      // If we retrieved some data make sure to update the page token
+      // such that the next request will be for data past what we just
+      // got.
+      request.page_token = Some(last.id().to_string());
+      activities.append(&mut VecDeque::from(fetched));
+    } else {
+      // We reached the end of the activity "stream", as nothing else
+      // was reported.
+      break Ok((request, activities, VecDeque::new()))
+    }
+  }
+}
+
+
 async fn activities_list(
   client: &mut Client,
   begin: Option<SystemTime>,
@@ -250,6 +313,7 @@ async fn activities_list(
   finra_taf_account: &str,
   registry: &HashMap<String, String>,
 ) -> Result<()> {
+  let mut unprocessed = VecDeque::new();
   let mut request = account_activities::ActivityReq {
     direction: account_activities::Direction::Ascending,
     after: begin,
@@ -263,16 +327,14 @@ async fn activities_list(
     .currency;
 
   loop {
-    let activities = client
-      .issue::<account_activities::Get>(&request)
-      .await
-      .with_context(|| "failed to retrieve account activities")?;
-
-    if let Some(last) = activities.last() {
-      request.page_token = Some(last.id().to_string());
-    } else {
+    let (req, activities, remainder) = activites_for_a_day(client, unprocessed, request).await?;
+    if activities.is_empty() {
+      assert!(remainder.is_empty());
       break
     }
+
+    request = req;
+    unprocessed = remainder;
 
     for activity in activities {
       match activity {
