@@ -1,5 +1,7 @@
 Unreleased
 ----------
+- Added support for merging partial fills for same order and at same
+  price to reduce number of generated entries
 - Added support for reporting regulatory fees
 - Made dividend and brokerage fee account names to use configurable
 - Bumped `apca` dependency to `0.19`

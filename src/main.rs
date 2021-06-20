@@ -302,6 +302,60 @@ async fn activites_for_a_day(
 }
 
 
+/// Merge partial fills for the same order at the same price.
+fn merge_partial_fills(
+  mut activities: VecDeque<account_activities::Activity>,
+) -> VecDeque<account_activities::Activity> {
+  let mut i = 0;
+  'outer: while i < activities.len() {
+    if let account_activities::Activity::Trade(trade) = &activities[i] {
+      if (trade.unfilled_quantity != 0 &&
+        // If `cumulative_quantity` equals `quantity` it would be the
+        // first partial fill, in which case there is nothing to merge
+        // yet.
+        trade.cumulative_quantity != trade.quantity) ||
+        // We can't differentiate between a fill in one go and the
+        // last partial fill that completes an order. As such, attempt
+        // a merge in both cases.
+        trade.unfilled_quantity == 0
+      {
+        // See if we can merge the trade with an earlier one.
+        for j in 0..i {
+          if let account_activities::Activity::Trade(candidate) = &activities[j] {
+            if candidate.order_id == trade.order_id && candidate.price == trade.price {
+              debug_assert_eq!(candidate.side, trade.side);
+              debug_assert_eq!(candidate.symbol, trade.symbol);
+              debug_assert!(candidate.unfilled_quantity >= trade.quantity);
+
+              let time = trade.transaction_time;
+              let quantity = trade.quantity;
+
+              if let account_activities::Activity::Trade(candidate) = &mut activities[j] {
+                candidate.transaction_time = time;
+                candidate.quantity += quantity;
+                candidate.unfilled_quantity -= quantity;
+                candidate.cumulative_quantity += quantity;
+
+                // Remove the outer trade activity. We do not increment
+                // `i` on this path, so we handle the removal correctly.
+                activities.remove(i);
+                continue 'outer
+              } else {
+                unreachable!()
+              }
+            }
+          }
+        }
+      }
+    }
+
+    i += 1;
+  }
+
+  activities
+}
+
+
 async fn activities_list(
   client: &mut Client,
   begin: Option<SystemTime>,
@@ -327,7 +381,8 @@ async fn activities_list(
     .currency;
 
   loop {
-    let (req, activities, remainder) = activites_for_a_day(client, unprocessed, request).await?;
+    let (req, mut activities, remainder) =
+      activites_for_a_day(client, unprocessed, request).await?;
     if activities.is_empty() {
       assert!(remainder.is_empty());
       break
@@ -335,6 +390,8 @@ async fn activities_list(
 
     request = req;
     unprocessed = remainder;
+
+    activities = merge_partial_fills(activities);
 
     for activity in activities {
       match activity {
@@ -415,4 +472,62 @@ fn main() {
   // buffered content.
   let _ = stdout().flush();
   exit(exit_code)
+}
+
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  use serde_json::from_str as from_json;
+
+
+  /// Test merging of partial fills.
+  #[test]
+  fn merge_activities_simple() {
+    let activities = r#"[
+{"id":"11111111111111111::22222222-3333-4444-5555-666666666666","activity_type":"FILL","transaction_time":"2021-06-15T16:17:44.31Z","type":"partial_fill","price":"9.33","qty":"1","side":"sell","symbol":"XYZ","leaves_qty":"55","order_id":"12345678-9012-3456-7890-123456789012","cum_qty":"1","order_status":"partially_filled"},
+{"id":"777777777777777777::88888888-9999-1111-2222-333333333333","activity_type":"FILL","transaction_time":"2021-06-15T16:18:56.299Z","type":"partial_fill","price":"9.33","qty":"1","side":"sell","symbol":"XYZ","leaves_qty":"54","order_id":"12345678-9012-3456-7890-123456789012","cum_qty":"2","order_status":"partially_filled"},
+{"id":"44444444444444444::55555555-6666-7777-8888-999999999999","activity_type":"FILL","transaction_time":"2021-06-15T16:19:18.136Z","type":"fill","price":"9.33","qty":"54","side":"sell","symbol":"XYZ","leaves_qty":"0","order_id":"12345678-9012-3456-7890-123456789012","cum_qty":"56","order_status":"filled"}
+]"#;
+    let activities = from_json::<VecDeque<account_activities::Activity>>(activities).unwrap();
+    let activities = merge_partial_fills(activities);
+
+    assert_eq!(activities.len(), 1);
+    match &activities[0] {
+      account_activities::Activity::Trade(trade) => {
+        assert_eq!(trade.quantity, 56);
+        assert_eq!(trade.cumulative_quantity, 56);
+        assert_eq!(trade.unfilled_quantity, 0);
+      },
+      _ => panic!("encountered unexpected account activity"),
+    }
+  }
+
+
+  /// Test merging of partial fills with intermixed unrelated activity.
+  #[test]
+  fn merge_activities_complex() {
+    let activities = r#"[
+{"id":"11111111111111111::11111111-1111-1111-1111-111111111111","activity_type":"FILL","transaction_time":"2021-06-15T16:19:18.136Z","type":"fill","price":"9.33","qty":"54","side":"sell","symbol":"BCD","leaves_qty":"0","order_id":"00000000-0000-0000-0000-000000000000","cum_qty":"56","order_status":"filled"},
+{"id":"22222222222222222::22222222-2222-2222-2222-222222222222","activity_type":"DIV","date":"2021-06-16","net_amount":"1.87","description":"Cash DIV @ 0.17, Pos QTY: 11.0, Rec Date: 2021-05-20","symbol":"EFG","qty":"11","per_share_amount":"0.17","status":"executed"},
+{"id":"33333333333333333::33333333-3333-3333-3333-333333333333","activity_type":"FILL","transaction_time":"2021-06-17T15:35:39.608Z","type":"partial_fill","price":"422.5","qty":"100","side":"buy","symbol":"XYZ","leaves_qty":"75","order_id":"12345678-9123-4567-8912-345678912345","cum_qty":"100","order_status":"partially_filled"},
+{"id":"44444444444444444::44444444-4444-4444-4444-444444444444","activity_type":"FILL","transaction_time":"2021-06-17T15:35:39.772Z","type":"partial_fill","price":"422.5","qty":"27","side":"buy","symbol":"XYZ","leaves_qty":"48","order_id":"12345678-9123-4567-8912-345678912345","cum_qty":"127","order_status":"partially_filled"},
+{"id":"55555555555555555::55555555-5555-5555-5555-555555555555","activity_type":"FILL","transaction_time":"2021-06-17T15:35:39.776Z","type":"partial_fill","price":"422.5","qty":"27","side":"buy","symbol":"XYZ","leaves_qty":"21","order_id":"12345678-9123-4567-8912-345678912345","cum_qty":"154","order_status":"partially_filled"},
+{"id":"66666666666666666::66666666-6666-6666-6666-666666666666","activity_type":"FILL","transaction_time":"2021-06-17T15:35:39.781Z","type":"fill","price":"422.5","qty":"21","side":"buy","symbol":"XYZ","leaves_qty":"0","order_id":"12345678-9123-4567-8912-345678912345","cum_qty":"175","order_status":"filled"},
+{"id":"77777777777777777::77777777-7777-7777-7777-777777777777","activity_type":"DIV","date":"2021-06-18","net_amount":"8.22","description":"Cash DIV @ 0.02","symbol":"ABC","qty":"411","per_share_amount":"0.02","status":"executed"}
+]"#;
+    let activities = from_json::<VecDeque<account_activities::Activity>>(activities).unwrap();
+    let activities = merge_partial_fills(activities);
+
+    assert_eq!(activities.len(), 4);
+    match &activities[2] {
+      account_activities::Activity::Trade(trade) => {
+        assert_eq!(trade.quantity, 175);
+        assert_eq!(trade.cumulative_quantity, 175);
+        assert_eq!(trade.unfilled_quantity, 0);
+      },
+      _ => panic!("encountered unexpected account activity"),
+    }
+  }
 }
