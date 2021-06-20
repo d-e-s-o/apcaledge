@@ -153,6 +153,32 @@ fn print_trade(
   Ok(())
 }
 
+
+/// Classify a non-trade fee activity according to its description.
+fn classify_fee<'act, 'acc>(
+  non_trade: &'act account_activities::NonTradeActivity,
+  sec_fee_account: &'acc str,
+  finra_taf_account: &'acc str,
+) -> Result<(&'acc str, &'act str)> {
+  debug_assert_eq!(non_trade.type_, account_activities::ActivityType::Fee);
+
+  if let Some(description) = &non_trade.description {
+    if description.starts_with("TAF fee") {
+      Ok((finra_taf_account, description))
+    } else if description.starts_with("REG fee") {
+      Ok((sec_fee_account, description))
+    } else {
+      bail!(
+        "failed to classify fee account activity with description: {}",
+        description
+      )
+    }
+  } else {
+    bail!("fee activity does not have a description")
+  }
+}
+
+
 fn print_non_trade(
   non_trade: &account_activities::NonTradeActivity,
   brokerage_account: &str,
@@ -206,23 +232,7 @@ fn print_non_trade(
       );
     },
     account_activities::ActivityType::Fee => {
-      let desc = non_trade
-        .description
-        .as_ref()
-        .map(String::as_ref)
-        .unwrap_or_else(|| "");
-
-      let to = if desc.starts_with("TAF fee") {
-        finra_taf_account
-      } else if desc.starts_with("REG fee") {
-        sec_fee_account
-      } else {
-        bail!(
-          "failed to classify fee account activity with description: {}",
-          desc
-        )
-      };
-
+      let (to, desc) = classify_fee(non_trade, sec_fee_account, finra_taf_account)?;
       println!(
         r#"{date} * {name}
   ; {desc}
