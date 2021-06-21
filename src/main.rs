@@ -30,6 +30,10 @@ use chrono::DateTime;
 
 use num_decimal::Num;
 
+use once_cell::sync::Lazy;
+
+use regex::Regex;
+
 use serde_json::from_reader as json_from_reader;
 
 use structopt::StructOpt;
@@ -50,6 +54,17 @@ const DEFAULT_BROKERAGE_FEE_ACCOUNT: &str = "Expenses:Broker:Fee";
 const DEFAULT_DIVIDEND_ACCOUNT: &str = "Income:Dividend";
 const DEFAULT_SEC_FEE_ACCOUNT: &str = "Expenses:Broker:SEC Fee";
 const DEFAULT_FINRA_TAF_ACCOUNT: &str = "Expenses:Broker:FINRA TAF";
+
+
+// TODO: Presumably, with fractional shares being supported by the API
+//       we need to support a floating point value here. But that likely
+//       needs adjustments in `apca` as well.
+static TAF_RE: Lazy<Regex> =
+  Lazy::new(|| Regex::new(r"TAF fee for proceed of (?P<shares>\d+) shares").unwrap());
+// TODO: It is unclear whether we can always assume a floating point
+//       representation like we do here.
+static REG_RE: Lazy<Regex> =
+  Lazy::new(|| Regex::new(r"REG fee for proceed of \$(?P<proceeds>\d+\.\d+)").unwrap());
 
 
 /// Parse a `SystemTime` from a provided date.
@@ -163,9 +178,9 @@ fn classify_fee<'act, 'acc>(
   debug_assert_eq!(non_trade.type_, account_activities::ActivityType::Fee);
 
   if let Some(description) = &non_trade.description {
-    if description.starts_with("TAF fee") {
+    if TAF_RE.is_match(description) {
       Ok((finra_taf_account, description))
-    } else if description.starts_with("REG fee") {
+    } else if REG_RE.is_match(description) {
       Ok((sec_fee_account, description))
     } else {
       bail!(
@@ -404,16 +419,16 @@ async fn activities_list(
     activities = merge_partial_fills(activities);
 
     for activity in activities {
-      match activity {
+      match &activity {
         account_activities::Activity::Trade(trade) => print_trade(
-          &trade,
+          trade,
           investment_account,
           brokerage_account,
           registry,
           &currency,
         )?,
         account_activities::Activity::NonTrade(non_trade) => print_non_trade(
-          &non_trade,
+          non_trade,
           brokerage_account,
           brokerage_fee_account,
           dividend_account,
