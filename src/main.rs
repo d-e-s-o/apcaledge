@@ -10,6 +10,7 @@ use std::io::stdout;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::exit;
+use std::str::FromStr as _;
 use std::time::SystemTime;
 use std::time::SystemTimeError;
 use std::time::UNIX_EPOCH;
@@ -134,8 +135,11 @@ fn format_date(time: &SystemTime) -> String {
 
 fn print_trade(
   trade: &account_activities::TradeActivity,
+  fees: &[account_activities::NonTradeActivity],
   investment_account: &str,
   brokerage_account: &str,
+  sec_fee_account: &str,
+  finra_taf_account: &str,
   registry: &HashMap<String, String>,
   currency: &str,
 ) -> Result<()> {
@@ -149,19 +153,37 @@ fn print_trade(
     account_activities::Side::ShortSell => -1,
   };
 
-  println!(r#"{date} * {name}
-  {from:<51}  {qty:>13} {sym} @ {price}
-  {to:<51}    {total:>15}
-"#,
+  println!(
+    r#"{date} * {name}
+  {from:<51}  {qty:>13} {sym} @ {price}"#,
     date = format_date(&trade.transaction_time),
     name = name,
     from = investment_account,
-    to = brokerage_account,
     qty = trade.quantity as i32 * multiplier,
     sym = trade.symbol,
     price = format_price(&trade.price, &currency),
+  );
+
+  let mut total_fees = Num::from(0);
+  for fee in fees {
+    let net_amount = &-&fee.net_amount;
+    let (to, description) = classify_fee(fee, sec_fee_account, finra_taf_account)?;
+    println!(
+      r#"  ; {desc}
+  {to:<51}    {total:>15}"#,
+      desc = description,
+      to = to,
+      total = format_price(net_amount, currency),
+    );
+
+    total_fees += net_amount;
+  }
+
+  println!(
+    "  {to:<51}    {total:>15}\n",
+    to = brokerage_account,
     total = format_price(
-      &(&trade.price * trade.quantity as i32 * -multiplier),
+      &(&(&trade.price * trade.quantity as i32 * -multiplier) - total_fees),
       &currency
     ),
   );
@@ -381,6 +403,83 @@ fn merge_partial_fills(
 }
 
 
+/// An activity as used by the program, created by processing Alpaca
+/// provided ones.
+enum Activity {
+  /// A trade activity with a optional associated regulatory fees.
+  Trade(
+    account_activities::TradeActivity,
+    Vec<account_activities::NonTradeActivity>,
+  ),
+  /// A non-trade activity (e.g., a dividend payment).
+  NonTrade(account_activities::NonTradeActivity),
+}
+
+impl From<account_activities::Activity> for Activity {
+  fn from(other: account_activities::Activity) -> Self {
+    match other {
+      account_activities::Activity::Trade(trade) => Self::Trade(trade, Vec::new()),
+      account_activities::Activity::NonTrade(non_trade) => Self::NonTrade(non_trade),
+    }
+  }
+}
+
+/// Try to associate (or merge) all non-trade fee activity with the
+/// corresponding trades.
+fn associate_fees_with_trades(
+  activities: VecDeque<account_activities::Activity>,
+) -> Result<VecDeque<Activity>> {
+  let mut activities = activities
+    .into_iter()
+    .map(Activity::from)
+    .collect::<VecDeque<_>>();
+
+  let mut i = 0;
+  'outer: while i < activities.len() {
+    if let Activity::NonTrade(non_trade) = &activities[i] {
+      if non_trade.type_ == account_activities::ActivityType::Fee {
+        if let Some(description) = &non_trade.description {
+          let (shares, proceeds) = if let Some(captures) = TAF_RE.captures(description) {
+            let shares = &captures["shares"];
+            let shares = u64::from_str(shares)
+              .with_context(|| format!("failed to parse shares string '{}' as number", shares))?;
+            (Some(shares), None)
+          } else if let Some(captures) = REG_RE.captures(description) {
+            let proceeds = &captures["proceeds"];
+            let proceeds = Num::from_str(proceeds).with_context(|| {
+              format!("failed to parse proceeds string '{}' as number", proceeds)
+            })?;
+            (None, Some(proceeds))
+          } else {
+            bail!("description string could not be parsed: {}", description)
+          };
+
+          let non_trade = non_trade.clone();
+
+          // Note that we actually have to scan the entire list of
+          // activities, because there is no guarantee that a fee is
+          // reported strictly after the corresponding trade, apparently.
+          for j in 0..activities.len() {
+            if let Activity::Trade(trade, fees) = &mut activities[j] {
+              if Some(trade.quantity) == shares || Some(&trade.price * trade.quantity) == proceeds {
+                fees.push(non_trade);
+                activities.remove(i);
+                continue 'outer
+              }
+            }
+          }
+        } else {
+          bail!("fee activity does not have a description")
+        }
+      }
+    }
+
+    i += 1;
+  }
+
+  Ok(activities)
+}
+
 async fn activities_list(
   client: &mut Client,
   begin: Option<SystemTime>,
@@ -406,8 +505,7 @@ async fn activities_list(
     .currency;
 
   loop {
-    let (req, mut activities, remainder) =
-      activites_for_a_day(client, unprocessed, request).await?;
+    let (req, activities, remainder) = activites_for_a_day(client, unprocessed, request).await?;
     if activities.is_empty() {
       assert!(remainder.is_empty());
       break
@@ -416,18 +514,22 @@ async fn activities_list(
     request = req;
     unprocessed = remainder;
 
-    activities = merge_partial_fills(activities);
+    let activities = merge_partial_fills(activities);
+    let activities = associate_fees_with_trades(activities)?;
 
     for activity in activities {
       match &activity {
-        account_activities::Activity::Trade(trade) => print_trade(
+        Activity::Trade(trade, fees) => print_trade(
           trade,
+          fees,
           investment_account,
           brokerage_account,
+          sec_fee_account,
+          finra_taf_account,
           registry,
           &currency,
         )?,
-        account_activities::Activity::NonTrade(non_trade) => print_non_trade(
+        Activity::NonTrade(non_trade) => print_non_trade(
           non_trade,
           brokerage_account,
           brokerage_fee_account,
@@ -551,6 +653,38 @@ mod tests {
         assert_eq!(trade.quantity, 175);
         assert_eq!(trade.cumulative_quantity, 175);
         assert_eq!(trade.unfilled_quantity, 0);
+      },
+      _ => panic!("encountered unexpected account activity"),
+    }
+  }
+
+
+  /// Test associating regulatory fees with the corresponding trades.
+  #[test]
+  fn associate_fees_and_trades() {
+    let activities = r#"[
+{"id":"11111111111111111::22222222-3333-4444-5555-666666666666","activity_type":"FILL","transaction_time":"2021-06-15T16:17:44.31Z","type":"partial_fill","price":"9.33","qty":"1","side":"sell","symbol":"XYZ","leaves_qty":"55","order_id":"12345678-9012-3456-7890-123456789012","cum_qty":"1","order_status":"partially_filled"},
+{"id":"777777777777777777::88888888-9999-1111-2222-333333333333","activity_type":"FILL","transaction_time":"2021-06-15T16:18:56.299Z","type":"partial_fill","price":"9.33","qty":"1","side":"sell","symbol":"XYZ","leaves_qty":"54","order_id":"12345678-9012-3456-7890-123456789012","cum_qty":"2","order_status":"partially_filled"},
+{"id":"44444444444444444::55555555-6666-7777-8888-999999999999","activity_type":"FILL","transaction_time":"2021-06-15T16:19:18.136Z","type":"fill","price":"9.33","qty":"54","side":"sell","symbol":"XYZ","leaves_qty":"0","order_id":"12345678-9012-3456-7890-123456789012","cum_qty":"56","order_status":"filled"},
+{"id":"11111111111111111::22222222-3333-4444-5555-666666666666","activity_type":"FEE","date":"2021-06-15","net_amount":"-0.01","description":"TAF fee for proceed of 56 shares (3 trades) on 2021-06-15 by 999999999","status":"executed"},
+{"id":"77777777777777777::88888888-9999-1111-2222-333333333333","activity_type":"FEE","date":"2021-06-15","net_amount":"-0.01","description":"REG fee for proceed of $522.48 on 2021-06-15 by 999999999","status":"executed"}
+]"#;
+    let activities = from_json::<VecDeque<account_activities::Activity>>(activities).unwrap();
+    let activities = merge_partial_fills(activities);
+    let activities = associate_fees_with_trades(activities).unwrap();
+
+    assert_eq!(activities.len(), 1);
+    match &activities[0] {
+      Activity::Trade(_, fees) => {
+        assert_eq!(fees.len(), 2);
+        assert_eq!(
+          fees[0].description.as_ref().map(String::as_ref),
+          Some("TAF fee for proceed of 56 shares (3 trades) on 2021-06-15 by 999999999")
+        );
+        assert_eq!(
+          fees[1].description.as_ref().map(String::as_ref),
+          Some("REG fee for proceed of $522.48 on 2021-06-15 by 999999999")
+        );
       },
       _ => panic!("encountered unexpected account activity"),
     }
