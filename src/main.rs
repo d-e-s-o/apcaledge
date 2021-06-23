@@ -83,6 +83,10 @@ struct Opts {
   /// yyyy-mm-dd).
   #[structopt(short, long, parse(try_from_str = parse_date))]
   begin: Option<SystemTime>,
+  /// Force keeping regulatory fees separate and not match them up with
+  /// trades on a best-effort basis.
+  #[structopt(long)]
+  force_separate_fees: bool,
   /// The name of the investment account, i.e., the one holding the
   /// shares.
   #[structopt(long, default_value = DEFAULT_INVESTMENT_ACCOUNT)]
@@ -483,6 +487,7 @@ fn associate_fees_with_trades(
 async fn activities_list(
   client: &mut Client,
   begin: Option<SystemTime>,
+  force_separate_fees: bool,
   investment_account: &str,
   brokerage_account: &str,
   brokerage_fee_account: &str,
@@ -515,7 +520,14 @@ async fn activities_list(
     unprocessed = remainder;
 
     let activities = merge_partial_fills(activities);
-    let activities = associate_fees_with_trades(activities)?;
+    let activities = if force_separate_fees {
+      activities
+        .into_iter()
+        .map(Activity::from)
+        .collect::<VecDeque<_>>()
+    } else {
+      associate_fees_with_trades(activities)?
+    };
 
     for activity in activities {
       match &activity {
@@ -573,6 +585,7 @@ async fn run() -> Result<()> {
   activities_list(
     &mut client,
     opts.begin,
+    opts.force_separate_fees,
     &opts.investment_account,
     &opts.brokerage_account,
     &opts.brokerage_fee_account,

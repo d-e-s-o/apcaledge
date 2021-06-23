@@ -5,6 +5,8 @@ Unreleased
 - Added support for reporting regulatory fees
   - Added logic for associating regulatory fees with the trades they
     belong to
+  - Introduced `--force-separate-fees` option to opt out of this
+    association logic
 - Made dividend and brokerage fee account names to use configurable
 - Bumped `apca` dependency to `0.19`
 
