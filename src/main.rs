@@ -68,6 +68,8 @@ static TAF_RE: Lazy<Regex> =
 //       representation like we do here.
 static REG_RE: Lazy<Regex> =
   Lazy::new(|| Regex::new(r"REG fee for proceed of \$(?P<proceeds>\d+\.\d+)").unwrap());
+static ACQ_PRICE_RE: Lazy<Regex> =
+  Lazy::new(|| Regex::new(r"Cash Merger \$(?P<price>\d+\.\d+)").unwrap());
 
 
 /// Parse a `SystemTime` from a provided date.
@@ -222,8 +224,34 @@ fn classify_fee<'act, 'acc>(
 }
 
 
+/// Extract the acquisition share price of a non-trade acquisition
+/// activity.
+fn extract_acquisition_share_price(
+  non_trade: &account_activities::NonTradeActivity,
+) -> Result<Num> {
+  debug_assert_eq!(
+    non_trade.type_,
+    account_activities::ActivityType::Acquisition
+  );
+
+  let description = non_trade
+    .description
+    .as_ref()
+    .context("acquisition activity does not have a description")?;
+  let captures = ACQ_PRICE_RE
+    .captures(description)
+    .with_context(|| "acquisition non-trade activity description could not be parsed")?;
+  let share_price = &captures["price"];
+  let share_price = Num::from_str(share_price)
+    .with_context(|| format!("failed to parse price string '{}' as number", share_price))?;
+
+  Ok(share_price)
+}
+
+
 fn print_non_trade(
   non_trade: &account_activities::NonTradeActivity,
+  investment_account: &str,
   brokerage_account: &str,
   brokerage_fee_account: &str,
   dividend_account: &str,
@@ -286,6 +314,42 @@ fn print_non_trade(
         desc = desc,
         to = to,
         total = format_price(&-&non_trade.net_amount, currency),
+      );
+    },
+    account_activities::ActivityType::Acquisition => {
+      // Note that we have seen "acquisition" activities that have a
+      // zero dollar amount and do not actually fit what we expect an
+      // acquisition to look like. Given that they are for no amount, it
+      // should be safe to just ignore them here.
+      if non_trade.net_amount.is_zero() {
+        return Ok(())
+      }
+
+      let share_price = extract_acquisition_share_price(non_trade)
+        .context("failed to extract share price from acquisition activity")?;
+      let symbol = non_trade
+        .symbol
+        .as_ref()
+        .ok_or_else(|| anyhow!("acquisition entry does not have an associated symbol"))?;
+      let name = registry
+        .get(symbol)
+        .ok_or_else(|| anyhow!("symbol {} not present in registry", symbol))?;
+      let quantity = &non_trade.net_amount / &share_price;
+
+      println!(
+        r#"; {name} got acquired
+{date} * {name}
+  {from:<51}  {qty:>13} {symbol} @ {price} = 0 {symbol}
+  {to:<51}    {total:>15}
+"#,
+        date = format_date(&non_trade.date),
+        name = name,
+        symbol = symbol,
+        qty = quantity,
+        price = format_price(&share_price, currency),
+        from = investment_account,
+        to = brokerage_account,
+        total = format_price(&non_trade.net_amount, currency),
       );
     },
     _ => (),
@@ -546,6 +610,7 @@ async fn activities_list(
         )?,
         Activity::NonTrade(non_trade) => print_non_trade(
           non_trade,
+          investment_account,
           brokerage_account,
           brokerage_fee_account,
           dividend_account,

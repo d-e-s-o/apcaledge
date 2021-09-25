@@ -7,6 +7,7 @@ Unreleased
     belong to
   - Introduced `--force-separate-fees` option to opt out of this
     association logic
+- Added support for acquisition non-trade activities
 - Made dividend and brokerage fee account names to use configurable
 - Bumped `apca` dependency to `0.19`
 
