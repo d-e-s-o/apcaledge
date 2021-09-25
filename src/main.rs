@@ -1,6 +1,8 @@
 // Copyright (C) 2020-2021 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#![allow(clippy::let_and_return, clippy::too_many_arguments)]
+
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::VecDeque;
@@ -133,7 +135,7 @@ fn convert_time(time: &SystemTime) -> Result<DateTime<Utc>, SystemTimeError> {
 /// Format a system time as a date.
 fn format_date(time: &SystemTime) -> String {
   convert_time(time)
-    .map(|time| time.date().format("%Y-%m-%d").to_string().into())
+    .map(|time| time.date().format("%Y-%m-%d").to_string())
     .unwrap()
 }
 
@@ -165,7 +167,7 @@ fn print_trade(
     from = investment_account,
     qty = trade.quantity as i32 * multiplier,
     sym = trade.symbol,
-    price = format_price(&trade.price, &currency),
+    price = format_price(&trade.price, currency),
   );
 
   let mut total_fees = Num::from(0);
@@ -188,7 +190,7 @@ fn print_trade(
     to = brokerage_account,
     total = format_price(
       &(&(&trade.price * trade.quantity as i32 * -multiplier) - total_fees),
-      &currency
+      currency
     ),
   );
   Ok(())
@@ -354,6 +356,7 @@ async fn activites_for_a_day(
 
 
 /// Merge partial fills for the same order at the same price.
+#[allow(clippy::nonminimal_bool)]
 fn merge_partial_fills(
   mut activities: VecDeque<account_activities::Activity>,
 ) -> VecDeque<account_activities::Activity> {
