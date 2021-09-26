@@ -9,7 +9,8 @@ Unreleased
     association logic
 - Added support for acquisition non-trade activities
 - Made dividend and brokerage fee account names to use configurable
-- Bumped `apca` dependency to `0.19`
+- Bumped `apca` dependency to `0.20`
+- Removed `time-util` dependency
 
 
 0.2.0

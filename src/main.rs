@@ -6,16 +6,12 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::VecDeque;
-use std::convert::TryInto;
 use std::fs::File;
 use std::io::stdout;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::exit;
 use std::str::FromStr as _;
-use std::time::SystemTime;
-use std::time::SystemTimeError;
-use std::time::UNIX_EPOCH;
 
 use apca::api::v2::account;
 use apca::api::v2::account_activities;
@@ -27,9 +23,9 @@ use anyhow::bail;
 use anyhow::Context;
 use anyhow::Result;
 
-use chrono::offset::TimeZone;
 use chrono::offset::Utc;
 use chrono::DateTime;
+use chrono::NaiveDate;
 
 use num_decimal::Num;
 
@@ -40,8 +36,6 @@ use regex::Regex;
 use serde_json::from_reader as json_from_reader;
 
 use structopt::StructOpt;
-
-use time_util::parse_system_time_from_date_str;
 
 use tokio::runtime::Builder;
 
@@ -72,12 +66,6 @@ static ACQ_PRICE_RE: Lazy<Regex> =
   Lazy::new(|| Regex::new(r"Cash Merger \$(?P<price>\d+\.\d+)").unwrap());
 
 
-/// Parse a `SystemTime` from a provided date.
-fn parse_date(date: &str) -> Result<SystemTime> {
-  parse_system_time_from_date_str(date).ok_or_else(|| anyhow!("{} is not a valid date", date))
-}
-
-
 /// A command line client for formatting Alpaca trades in Ledger format.
 #[derive(Debug, StructOpt)]
 struct Opts {
@@ -85,8 +73,8 @@ struct Opts {
   registry: PathBuf,
   /// Only show activities dated at the given date or after (format:
   /// yyyy-mm-dd).
-  #[structopt(short, long, parse(try_from_str = parse_date))]
-  begin: Option<SystemTime>,
+  #[structopt(short, long)]
+  begin: Option<NaiveDate>,
   /// Force keeping regulatory fees separate and not match them up with
   /// trades on a best-effort basis.
   #[structopt(long)]
@@ -124,21 +112,9 @@ fn format_price(price: &Num, currency: &str) -> String {
   format!("{} {}", price.display().min_precision(2), currency)
 }
 
-/// Convert a `SystemTime` into a `DateTime`.
-fn convert_time(time: &SystemTime) -> Result<DateTime<Utc>, SystemTimeError> {
-  time.duration_since(UNIX_EPOCH).map(|duration| {
-    let secs = duration.as_secs().try_into().unwrap();
-    let nanos = duration.subsec_nanos();
-    let time = Utc.timestamp(secs, nanos);
-    time
-  })
-}
-
-/// Format a system time as a date.
-fn format_date(time: &SystemTime) -> String {
-  convert_time(time)
-    .map(|time| time.date().format("%Y-%m-%d").to_string())
-    .unwrap()
+/// Format a date time as a date.
+fn format_date(time: DateTime<Utc>) -> String {
+  time.date().format("%Y-%m-%d").to_string()
 }
 
 fn print_trade(
@@ -164,7 +140,7 @@ fn print_trade(
   println!(
     r#"{date} * {name}
   {from:<51}  {qty:>13} {sym} @ {price}"#,
-    date = format_date(&trade.transaction_time),
+    date = format_date(trade.transaction_time),
     name = name,
     from = investment_account,
     qty = trade.quantity as i32 * multiplier,
@@ -275,7 +251,7 @@ fn print_non_trade(
   {from:<51}
   {to:<51}    {total:>15}
 "#,
-        date = format_date(&non_trade.date),
+        date = format_date(non_trade.date),
         name = name,
         from = dividend_account,
         to = brokerage_account,
@@ -294,7 +270,7 @@ fn print_non_trade(
   {from:<51}
   {to:<51}    {total:>15}
 "#,
-        date = format_date(&non_trade.date),
+        date = format_date(non_trade.date),
         name = ALPACA,
         desc = desc,
         from = brokerage_fee_account,
@@ -309,7 +285,7 @@ fn print_non_trade(
   ; {desc}
   {to:<51}    {total:>15}
 "#,
-        date = format_date(&non_trade.date),
+        date = format_date(non_trade.date),
         name = ALPACA,
         desc = desc,
         to = to,
@@ -342,7 +318,7 @@ fn print_non_trade(
   {from:<51}  {qty:>13} {symbol} @ {price} = 0 {symbol}
   {to:<51}    {total:>15}
 "#,
-        date = format_date(&non_trade.date),
+        date = format_date(non_trade.date),
         name = name,
         symbol = symbol,
         qty = quantity,
@@ -355,15 +331,6 @@ fn print_non_trade(
     _ => (),
   }
   Ok(())
-}
-
-
-/// Retrieve the time stamp at which an account activity occurred.
-fn time(activity: &account_activities::Activity) -> SystemTime {
-  match activity {
-    account_activities::Activity::Trade(trade) => trade.transaction_time,
-    account_activities::Activity::NonTrade(non_trade) => non_trade.date,
-  }
 }
 
 
@@ -382,10 +349,8 @@ async fn activites_for_a_day(
       // If we have a last element we must have a first one, so it's
       // fine to unwrap.
       let first = activities.front().unwrap();
-      // TODO: We should use apca::account_activities::Activity::time
-      //       once it's released.
-      let start = DateTime::<Utc>::from(time(first)).date();
-      let end = DateTime::<Utc>::from(time(last)).date();
+      let start = first.time().date();
+      let end = last.time().date();
 
       if start != end {
         // The date changed between the first and the last activity,
@@ -393,7 +358,7 @@ async fn activites_for_a_day(
         // such, report the activities collected so far.
         let (same_day, other_day) = activities
           .into_iter()
-          .partition(|activity| DateTime::<Utc>::from(time(activity)).date() == start);
+          .partition(|activity| activity.time().date() == start);
 
         break Ok((request, same_day, other_day))
       }
@@ -553,7 +518,7 @@ fn associate_fees_with_trades(
 
 async fn activities_list(
   client: &mut Client,
-  begin: Option<SystemTime>,
+  begin: Option<NaiveDate>,
   force_separate_fees: bool,
   investment_account: &str,
   brokerage_account: &str,
@@ -566,7 +531,7 @@ async fn activities_list(
   let mut unprocessed = VecDeque::new();
   let mut request = account_activities::ActivityReq {
     direction: account_activities::Direction::Ascending,
-    after: begin,
+    after: begin.map(|begin| DateTime::from_utc(begin.and_hms(0, 0, 0), Utc)),
     ..Default::default()
   };
 
