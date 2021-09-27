@@ -385,39 +385,49 @@ async fn activites_for_a_day(
 
 
 /// Merge partial fills for the same order at the same price.
-#[allow(clippy::nonminimal_bool)]
 fn merge_partial_fills(
   mut activities: VecDeque<account_activities::Activity>,
 ) -> VecDeque<account_activities::Activity> {
   let mut i = 0;
   'outer: while i < activities.len() {
     if let account_activities::Activity::Trade(trade) = &activities[i] {
-      if (trade.unfilled_quantity != 0 &&
-        // If `cumulative_quantity` equals `quantity` it would be the
-        // first partial fill, in which case there is nothing to merge
-        // yet.
-        trade.cumulative_quantity != trade.quantity) ||
-        // We can't differentiate between a fill in one go and the
-        // last partial fill that completes an order. As such, attempt
-        // a merge in both cases.
-        trade.unfilled_quantity == 0
-      {
-        // See if we can merge the trade with an earlier one.
-        for j in 0..i {
+      // If we have a trade that has unfilled quantity left (i.e., does
+      // not complete an order), then we search for the matching "final"
+      // fill to merge with.
+      if trade.unfilled_quantity != 0 {
+        // See if we can merge the trade with another one. Note that
+        // Alpaca may send activities in any order, really, and so we
+        // cannot just look at later ones but actually have to scan the
+        // entire array.
+        for j in 0..activities.len() {
+          if j == i {
+            // We do not want to merge an activity with itself.
+            continue
+          }
+
           if let account_activities::Activity::Trade(candidate) = &activities[j] {
-            if candidate.order_id == trade.order_id && candidate.price == trade.price {
+            // We are looking for the "final" fill, i.e., the one that
+            // completes the order. It will have an `unfilled_quantity`
+            // of 0.
+            // Note that it is possible there there is no such fill in
+            // the list of activities. That is because we process them
+            // in batches and it is conceivable that not all partial
+            // fills for an order happened in the same batch. So we may
+            // end up missing out merging partial fills even, pushing
+            // the burden on the user. That should be a rare occurrence
+            // and it won't be too much work, though.
+            if candidate.order_id == trade.order_id
+              && candidate.price == trade.price
+              && candidate.unfilled_quantity == 0
+            {
               debug_assert_eq!(candidate.side, trade.side);
               debug_assert_eq!(candidate.symbol, trade.symbol);
-              debug_assert!(candidate.unfilled_quantity >= trade.quantity);
 
-              let time = trade.transaction_time;
               let quantity = trade.quantity;
 
               if let account_activities::Activity::Trade(candidate) = &mut activities[j] {
-                candidate.transaction_time = time;
                 candidate.quantity += quantity;
-                candidate.unfilled_quantity -= quantity;
-                candidate.cumulative_quantity += quantity;
+                debug_assert!(candidate.quantity <= candidate.cumulative_quantity);
 
                 // Remove the outer trade activity. We do not increment
                 // `i` on this path, so we handle the removal correctly.
