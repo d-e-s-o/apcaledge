@@ -18,6 +18,13 @@ A command line tool for exporting trading activity from Alpaca
 (alpaca.markets) in a Ledger CLI compatible format.
 """
 
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+incremental = false
+panic = "abort"
+
 [dependencies]
 apca = {version = "0.20", default-features = false}
 anyhow = {version = "1.0", default-features = false, features = ["std"]}
