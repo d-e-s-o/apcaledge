@@ -1,5 +1,5 @@
-Unreleased
-----------
+0.2.1
+-----
 - Added support for merging partial fills for same order and at same
   price to reduce number of generated entries
 - Added support for reporting regulatory fees
