@@ -248,7 +248,7 @@ fn print_non_trade(
 
       println!(
         r#"{date} * {name}
-  {from:<51}
+  {from}
   {to:<51}    {total:>15}
 "#,
         date = format_date(non_trade.date),
@@ -267,7 +267,7 @@ fn print_non_trade(
 
       println!(
         r#"{date} * {name}{desc}
-  {from:<51}
+  {from}
   {to:<51}    {total:>15}
 "#,
         date = format_date(non_trade.date),
