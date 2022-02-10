@@ -1,3 +1,8 @@
+Unreleased
+----------
+- Bumped `apca` dependency to `0.21`
+
+
 0.2.1
 -----
 - Added support for merging partial fills for same order and at same

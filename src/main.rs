@@ -1,4 +1,4 @@
-// Copyright (C) 2020-2021 Daniel Mueller <deso@posteo.net>
+// Copyright (C) 2020-2022 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #![allow(clippy::let_and_return, clippy::too_many_arguments)]
@@ -143,7 +143,7 @@ fn print_trade(
     date = format_date(trade.transaction_time),
     name = name,
     from = investment_account,
-    qty = trade.quantity as i32 * multiplier,
+    qty = &trade.quantity * multiplier,
     sym = trade.symbol,
     price = format_price(&trade.price, currency),
   );
@@ -167,7 +167,7 @@ fn print_trade(
     "  {to:<51}    {total:>15}\n",
     to = brokerage_account,
     total = format_price(
-      &(&(&trade.price * trade.quantity as i32 * -multiplier) - total_fees),
+      &(&(&trade.price * &trade.quantity * -multiplier) - total_fees),
       currency
     ),
   );
@@ -394,7 +394,7 @@ fn merge_partial_fills(
       // If we have a trade that has unfilled quantity left (i.e., does
       // not complete an order), then we search for the matching "final"
       // fill to merge with.
-      if trade.unfilled_quantity != 0 {
+      if !trade.unfilled_quantity.is_zero() {
         // See if we can merge the trade with another one. Note that
         // Alpaca may send activities in any order, really, and so we
         // cannot just look at later ones but actually have to scan the
@@ -418,12 +418,12 @@ fn merge_partial_fills(
             // and it won't be too much work, though.
             if candidate.order_id == trade.order_id
               && candidate.price == trade.price
-              && candidate.unfilled_quantity == 0
+              && candidate.unfilled_quantity.is_zero()
             {
               debug_assert_eq!(candidate.side, trade.side);
               debug_assert_eq!(candidate.symbol, trade.symbol);
 
-              let quantity = trade.quantity;
+              let quantity = trade.quantity.clone();
 
               if let account_activities::Activity::Trade(candidate) = &mut activities[j] {
                 candidate.quantity += quantity;
@@ -487,7 +487,7 @@ fn associate_fees_with_trades(
         if let Some(description) = &non_trade.description {
           let (shares, proceeds) = if let Some(captures) = TAF_RE.captures(description) {
             let shares = &captures["shares"];
-            let shares = u64::from_str(shares)
+            let shares = Num::from_str(shares)
               .with_context(|| format!("failed to parse shares string '{}' as number", shares))?;
             (Some(shares), None)
           } else if let Some(captures) = REG_RE.captures(description) {
@@ -507,7 +507,9 @@ fn associate_fees_with_trades(
           // reported strictly after the corresponding trade, apparently.
           for j in 0..activities.len() {
             if let Activity::Trade(trade, fees) = &mut activities[j] {
-              if Some(trade.quantity) == shares || Some(&trade.price * trade.quantity) == proceeds {
+              if Some(&trade.quantity) == shares.as_ref()
+                || Some(&trade.price * &trade.quantity) == proceeds
+              {
                 fees.push(non_trade);
                 activities.remove(i);
                 continue 'outer
@@ -679,9 +681,9 @@ mod tests {
     assert_eq!(activities.len(), 1);
     match &activities[0] {
       account_activities::Activity::Trade(trade) => {
-        assert_eq!(trade.quantity, 56);
-        assert_eq!(trade.cumulative_quantity, 56);
-        assert_eq!(trade.unfilled_quantity, 0);
+        assert_eq!(trade.quantity, Num::from(56));
+        assert_eq!(trade.cumulative_quantity, Num::from(56));
+        assert!(trade.unfilled_quantity.is_zero());
       },
       _ => panic!("encountered unexpected account activity"),
     }
@@ -706,9 +708,9 @@ mod tests {
     assert_eq!(activities.len(), 4);
     match &activities[2] {
       account_activities::Activity::Trade(trade) => {
-        assert_eq!(trade.quantity, 175);
-        assert_eq!(trade.cumulative_quantity, 175);
-        assert_eq!(trade.unfilled_quantity, 0);
+        assert_eq!(trade.quantity, Num::from(175));
+        assert_eq!(trade.cumulative_quantity, Num::from(175));
+        assert!(trade.unfilled_quantity.is_zero());
       },
       _ => panic!("encountered unexpected account activity"),
     }
