@@ -1,6 +1,6 @@
 Unreleased
 ----------
-- Bumped `apca` dependency to `0.21`
+- Bumped `apca` dependency to `0.22`
 
 
 0.2.1
