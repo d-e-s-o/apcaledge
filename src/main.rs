@@ -41,7 +41,7 @@ use tokio::runtime::Builder;
 
 use tracing::subscriber::set_global_default as set_global_subscriber;
 use tracing_subscriber::filter::LevelFilter;
-use tracing_subscriber::fmt::time::ChronoLocal;
+use tracing_subscriber::fmt::time::SystemTime;
 use tracing_subscriber::FmtSubscriber;
 
 const ALPACA: &str = "Alpaca Securities LLC";
@@ -613,7 +613,7 @@ async fn run() -> Result<()> {
 
   let subscriber = FmtSubscriber::builder()
     .with_max_level(level)
-    .with_timer(ChronoLocal::rfc3339())
+    .with_timer(SystemTime)
     .finish();
 
   set_global_subscriber(subscriber).with_context(|| "failed to set tracing subscriber")?;
