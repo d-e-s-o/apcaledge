@@ -3,13 +3,14 @@
 
 #![allow(clippy::let_and_return, clippy::too_many_arguments)]
 
+mod args;
+
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::stdout;
 use std::io::Write;
-use std::path::PathBuf;
 use std::process::exit;
 use std::str::FromStr as _;
 
@@ -35,7 +36,7 @@ use regex::Regex;
 
 use serde_json::from_reader as json_from_reader;
 
-use structopt::StructOpt;
+use structopt::StructOpt as _;
 
 use tokio::runtime::Builder;
 
@@ -44,13 +45,9 @@ use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::fmt::time::SystemTime;
 use tracing_subscriber::FmtSubscriber;
 
+use crate::args::Args;
+
 const ALPACA: &str = "Alpaca Securities LLC";
-const DEFAULT_INVESTMENT_ACCOUNT: &str = "Assets:Investments:Alpaca:Stock";
-const DEFAULT_BROKERAGE_ACCOUNT: &str = "Assets:Alpaca Brokerage";
-const DEFAULT_BROKERAGE_FEE_ACCOUNT: &str = "Expenses:Broker:Fee";
-const DEFAULT_DIVIDEND_ACCOUNT: &str = "Income:Dividend";
-const DEFAULT_SEC_FEE_ACCOUNT: &str = "Expenses:Broker:SEC Fee";
-const DEFAULT_FINRA_TAF_ACCOUNT: &str = "Expenses:Broker:FINRA TAF";
 
 
 // TODO: Presumably, with fractional shares being supported by the API
@@ -64,45 +61,6 @@ static REG_RE: Lazy<Regex> =
   Lazy::new(|| Regex::new(r"REG fee for proceed of \$(?P<proceeds>\d+\.\d+)").unwrap());
 static ACQ_PRICE_RE: Lazy<Regex> =
   Lazy::new(|| Regex::new(r"Cash Merger \$(?P<price>\d+\.\d+)").unwrap());
-
-
-/// A command line client for formatting Alpaca trades in Ledger format.
-#[derive(Debug, StructOpt)]
-struct Opts {
-  /// The path to the JSON registry for looking up names from symbols.
-  registry: PathBuf,
-  /// Only show activities dated at the given date or after (format:
-  /// yyyy-mm-dd).
-  #[structopt(short, long)]
-  begin: Option<NaiveDate>,
-  /// Force keeping regulatory fees separate and not match them up with
-  /// trades on a best-effort basis.
-  #[structopt(long)]
-  force_separate_fees: bool,
-  /// The name of the investment account, i.e., the one holding the
-  /// shares.
-  #[structopt(long, default_value = DEFAULT_INVESTMENT_ACCOUNT)]
-  investment_account: String,
-  /// The name of the brokerage account, i.e., the one holding any
-  /// uninvested cash.
-  #[structopt(long, default_value = DEFAULT_BROKERAGE_ACCOUNT)]
-  brokerage_account: String,
-  /// The name of the brokerage's fee account.
-  #[structopt(long, default_value = DEFAULT_BROKERAGE_FEE_ACCOUNT)]
-  brokerage_fee_account: String,
-  /// The name of the account to account dividend payments against.
-  #[structopt(long, default_value = DEFAULT_DIVIDEND_ACCOUNT)]
-  dividend_account: String,
-  /// The name of the account to use for regulatory fees by the SEC.
-  #[structopt(long, default_value = DEFAULT_SEC_FEE_ACCOUNT)]
-  sec_fee_account: String,
-  /// The name of the account to use for FINRA trade activity fees.
-  #[structopt(long, default_value = DEFAULT_FINRA_TAF_ACCOUNT)]
-  finra_taf_account: String,
-  /// Increase verbosity (can be supplied multiple times).
-  #[structopt(short = "v", long = "verbose", global = true, parse(from_occurrences))]
-  verbosity: usize,
-}
 
 
 /// Format a price value.
@@ -603,8 +561,8 @@ async fn activities_list(
 }
 
 async fn run() -> Result<()> {
-  let opts = Opts::from_args();
-  let level = match opts.verbosity {
+  let args = Args::from_args();
+  let level = match args.verbosity {
     0 => LevelFilter::WARN,
     1 => LevelFilter::INFO,
     2 => LevelFilter::DEBUG,
@@ -618,10 +576,10 @@ async fn run() -> Result<()> {
 
   set_global_subscriber(subscriber).with_context(|| "failed to set tracing subscriber")?;
 
-  let file = File::open(&opts.registry)
-    .with_context(|| format!("failed to open registry file {}", opts.registry.display()))?;
+  let file = File::open(&args.registry)
+    .with_context(|| format!("failed to open registry file {}", args.registry.display()))?;
   let registry = json_from_reader::<_, HashMap<String, String>>(file)
-    .with_context(|| format!("failed to read registry {}", opts.registry.display()))?;
+    .with_context(|| format!("failed to read registry {}", args.registry.display()))?;
 
   let api_info =
     ApiInfo::from_env().with_context(|| "failed to retrieve Alpaca environment information")?;
@@ -629,14 +587,14 @@ async fn run() -> Result<()> {
 
   activities_list(
     &mut client,
-    opts.begin,
-    opts.force_separate_fees,
-    &opts.investment_account,
-    &opts.brokerage_account,
-    &opts.brokerage_fee_account,
-    &opts.dividend_account,
-    &opts.sec_fee_account,
-    &opts.finra_taf_account,
+    args.begin,
+    args.force_separate_fees,
+    &args.investment_account,
+    &args.brokerage_account,
+    &args.brokerage_fee_account,
+    &args.dividend_account,
+    &args.sec_fee_account,
+    &args.finra_taf_account,
     &registry,
   )
   .await
