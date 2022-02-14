@@ -18,7 +18,26 @@ const DEFAULT_FINRA_TAF_ACCOUNT: &str = "Expenses:Broker:FINRA TAF";
 
 /// A command line client for formatting Alpaca trades in Ledger format.
 #[derive(Debug, StructOpt)]
+#[structopt(about)]
 pub struct Args {
+  #[structopt(subcommand)]
+  pub command: Command,
+  /// Increase verbosity (can be supplied multiple times).
+  #[structopt(short = "v", long = "verbose", global = true, parse(from_occurrences))]
+  pub verbosity: usize,
+}
+
+
+#[derive(Debug, StructOpt)]
+pub enum Command {
+  /// List trades and other account activity.
+  Activity(Activity),
+}
+
+
+/// Retrieve and print account activity.
+#[derive(Debug, StructOpt)]
+pub struct Activity {
   /// The path to the JSON registry for looking up names from symbols.
   pub registry: PathBuf,
   /// Only show activities dated at the given date or after (format:
@@ -49,7 +68,4 @@ pub struct Args {
   /// The name of the account to use for FINRA trade activity fees.
   #[structopt(long, default_value = DEFAULT_FINRA_TAF_ACCOUNT)]
   pub finra_taf_account: String,
-  /// Increase verbosity (can be supplied multiple times).
-  #[structopt(short = "v", long = "verbose", global = true, parse(from_occurrences))]
-  pub verbosity: usize,
 }

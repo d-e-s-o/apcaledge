@@ -46,6 +46,7 @@ use tracing_subscriber::fmt::time::SystemTime;
 use tracing_subscriber::FmtSubscriber;
 
 use crate::args::Args;
+use crate::args::Command;
 
 const ALPACA: &str = "Alpaca Securities LLC";
 
@@ -576,28 +577,33 @@ async fn run() -> Result<()> {
 
   set_global_subscriber(subscriber).with_context(|| "failed to set tracing subscriber")?;
 
-  let file = File::open(&args.registry)
-    .with_context(|| format!("failed to open registry file {}", args.registry.display()))?;
-  let registry = json_from_reader::<_, HashMap<String, String>>(file)
-    .with_context(|| format!("failed to read registry {}", args.registry.display()))?;
-
   let api_info =
     ApiInfo::from_env().with_context(|| "failed to retrieve Alpaca environment information")?;
   let mut client = Client::new(api_info);
 
-  activities_list(
-    &mut client,
-    args.begin,
-    args.force_separate_fees,
-    &args.investment_account,
-    &args.brokerage_account,
-    &args.brokerage_fee_account,
-    &args.dividend_account,
-    &args.sec_fee_account,
-    &args.finra_taf_account,
-    &registry,
-  )
-  .await
+  match args.command {
+    Command::Activity(activity) => {
+      let registry = activity.registry;
+      let file = File::open(&registry)
+        .with_context(|| format!("failed to open registry file {}", registry.display()))?;
+      let registry = json_from_reader::<_, HashMap<String, String>>(file)
+        .with_context(|| format!("failed to read registry {}", registry.display()))?;
+
+      activities_list(
+        &mut client,
+        activity.begin,
+        activity.force_separate_fees,
+        &activity.investment_account,
+        &activity.brokerage_account,
+        &activity.brokerage_fee_account,
+        &activity.dividend_account,
+        &activity.sec_fee_account,
+        &activity.finra_taf_account,
+        &registry,
+      )
+      .await
+    },
+  }
 }
 
 fn main() {

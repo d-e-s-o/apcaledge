@@ -1,5 +1,6 @@
 Unreleased
 ----------
+- Moved functionality behind `activity` sub-command
 - Bumped `apca` dependency to `0.22`
 - Bumped `tracing-subscriber` dependency to `0.3`
 
