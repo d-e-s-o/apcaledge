@@ -1,8 +1,13 @@
 // Copyright (C) 2022 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result as FmtResult;
 use std::path::PathBuf;
+use std::str::FromStr;
 
+use chrono::Local;
 use chrono::NaiveDate;
 
 use structopt::StructOpt;
@@ -32,6 +37,8 @@ pub struct Args {
 pub enum Command {
   /// List trades and other account activity.
   Activity(Activity),
+  /// Import trades and other account activity.
+  Prices(Prices),
 }
 
 
@@ -68,4 +75,41 @@ pub struct Activity {
   /// The name of the account to use for FINRA trade activity fees.
   #[structopt(long, default_value = DEFAULT_FINRA_TAF_ACCOUNT)]
   pub finra_taf_account: String,
+}
+
+
+/// A structopt usable date type that defaults to "today".
+#[derive(Debug)]
+pub struct Date(pub NaiveDate);
+
+impl Default for Date {
+  fn default() -> Self {
+    Self(Local::today().naive_local())
+  }
+}
+
+impl Display for Date {
+  fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+    Display::fmt(&self.0, f)
+  }
+}
+
+impl FromStr for Date {
+  type Err = <NaiveDate as FromStr>::Err;
+
+  fn from_str(string: &str) -> Result<Self, Self::Err> {
+    NaiveDate::from_str(string).map(Self)
+  }
+}
+
+
+/// Retrieve the historic prices for a set of assets.
+#[derive(Debug, StructOpt)]
+pub struct Prices {
+  /// The symbols for which to retrieve the most recent price.
+  pub symbols: Vec<String>,
+  /// The date for which to retrieve the price or, if not specified,
+  /// defaults today's date (format: yyyy-mm-dd).
+  #[structopt(short, long, default_value)]
+  pub date: Date,
 }

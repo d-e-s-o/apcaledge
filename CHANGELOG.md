@@ -1,6 +1,7 @@
 Unreleased
 ----------
 - Moved functionality behind `activity` sub-command
+- Introduced `prices` sub-command for retrieving historic asset prices
 - Bumped `apca` dependency to `0.22`
 - Bumped `tracing-subscriber` dependency to `0.3`
 

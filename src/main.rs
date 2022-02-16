@@ -6,27 +6,47 @@
 mod args;
 
 use std::borrow::Cow;
+use std::cmp::min;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::fs::File;
+use std::future::Future;
 use std::io::stdout;
 use std::io::Write;
 use std::process::exit;
 use std::str::FromStr as _;
+use std::sync::Arc;
 
 use apca::api::v2::account;
 use apca::api::v2::account_activities;
+use apca::api::v2::clock;
+use apca::data::v2::bars;
 use apca::ApiInfo;
 use apca::Client;
+use apca::RequestError;
 
 use anyhow::anyhow;
 use anyhow::bail;
+use anyhow::ensure;
 use anyhow::Context;
 use anyhow::Result;
 
-use chrono::offset::Utc;
 use chrono::DateTime;
+use chrono::Datelike as _;
+use chrono::Duration;
+use chrono::Local;
 use chrono::NaiveDate;
+use chrono::TimeZone as _;
+use chrono::Utc;
+use chrono_tz::America::New_York;
+
+use futures::future::join;
+use futures::future::Shared;
+use futures::stream::iter;
+use futures::FutureExt as _;
+use futures::StreamExt as _;
+use futures::TryFutureExt as _;
+use futures::TryStreamExt as _;
 
 use num_decimal::Num;
 
@@ -561,6 +581,119 @@ async fn activities_list(
   Ok(())
 }
 
+
+/// Retrieve and print the price of the asset with the given symbol.
+async fn price_get<F>(
+  client: &Client,
+  symbol: String,
+  date: NaiveDate,
+  clock: Shared<F>,
+) -> Result<()>
+where
+  F: Future<Output = Result<clock::Clock, Arc<RequestError<clock::GetError>>>>,
+{
+  let today = Local::today().naive_local();
+  ensure!(date <= today, "the provided date needs to be in the past");
+
+  let start = date - Duration::weeks(2);
+  let end = min(date + Duration::weeks(1), today);
+
+  let request = bars::BarReq {
+    symbol: symbol.clone(),
+    limit: None,
+    start: New_York
+      .ymd(start.year(), start.month(), start.day())
+      .and_hms(0, 0, 0)
+      .with_timezone(&Utc),
+    end: New_York
+      .ymd(end.year(), end.month(), end.day())
+      .and_hms(0, 0, 0)
+      .with_timezone(&Utc),
+    timeframe: bars::TimeFrame::OneDay,
+    page_token: None,
+    adjustment: Some(bars::Adjustment::All),
+  };
+
+  let bars = client.issue::<bars::Get>(&request);
+
+  let (response1, response2) = join(bars, clock).await;
+  let mut bars = response1
+    .with_context(|| {
+      format!(
+        "failed to retrieve historical aggregate bars for {}",
+        symbol
+      )
+    })?
+    .bars;
+  let clock = response2.context("failed to retrieve current market clock")?;
+
+  let key_fn = |bar: &bars::Bar| bar.time;
+  // Alpaca does not document a specific order in which the bars are
+  // reported, so sort them to be sure they are ascending.
+  bars.sort_unstable_by_key(key_fn);
+
+  let mut utc_date = New_York
+    .ymd(date.year(), date.month(), date.day())
+    .and_hms(0, 0, 0)
+    .with_timezone(&Utc);
+
+  // If the market is currently open (or opens later today) then we are
+  // interested in yesterday's date. The reason being that Alpaca
+  // would report bars for the ongoing day, and those will change until
+  // we reached the end of the trading day.
+  if clock.open || clock.next_open.date() == utc_date.date() {
+    utc_date = utc_date - Duration::days(1);
+  }
+
+  let bar = match bars.binary_search_by_key(&utc_date, key_fn) {
+    Ok(index) => bars.get(index).unwrap(),
+    Err(index) => {
+      // The index reported here is where we would insert. But given
+      // that we do not insert we have to subtract one in order to get
+      // the previous bar.
+      if let Some(bar) = bars.get(index.saturating_sub(1)) {
+        &bar
+      } else {
+        // The index does not exist, meaning that we are past the last
+        // bar that we received. Just pick the last one then.
+        bars
+          .last()
+          .ok_or_else(|| anyhow!("no historical bars found for {}", symbol))?
+      }
+    },
+  };
+
+  println!(
+    "P {date} 23:59:59 {sym} USD {price}",
+    date = New_York
+      .from_utc_datetime(&bar.time.naive_utc())
+      .date()
+      .naive_local(),
+    sym = symbol,
+    price = bar.close.display().min_precision(2),
+  );
+  Ok(())
+}
+
+
+/// Retrieve and print the price the given list of assets.
+async fn prices_get(client: &Client, symbols: Vec<String>, date: NaiveDate) -> Result<()> {
+  // We need the current market clock to decide which price exactly to
+  // report. But we only want to make one market clock request. So we
+  // have to `Arc` up the error here in order for us to be able to share
+  // the future.
+  let clock = client.issue::<clock::Get>(&()).map_err(Arc::new).shared();
+
+  let () = iter(symbols)
+    .map(Ok)
+    .map_ok(|symbol| price_get(client, symbol, date, clock.clone()))
+    .try_buffer_unordered(32)
+    .fold(Ok(()), |agg, result| async move { result.and(agg) })
+    .await?;
+  Ok(())
+}
+
+
 async fn run() -> Result<()> {
   let args = Args::from_args();
   let level = match args.verbosity {
@@ -603,6 +736,7 @@ async fn run() -> Result<()> {
       )
       .await
     },
+    Command::Prices(prices) => prices_get(&client, prices.symbols, prices.date.0).await,
   }
 }
 
