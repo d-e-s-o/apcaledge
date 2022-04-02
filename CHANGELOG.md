@@ -4,7 +4,7 @@ Unreleased
 - Introduced `prices` sub-command for retrieving historic asset prices
 - Enabled CI pipeline for building, testing, and linting of the project
   - Added badge indicating pipeline status
-- Bumped `apca` dependency to `0.23`
+- Bumped `apca` dependency to `0.24`
 - Bumped `tracing-subscriber` dependency to `0.3`
 
 
