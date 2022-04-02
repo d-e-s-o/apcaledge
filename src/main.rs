@@ -596,23 +596,21 @@ where
   ensure!(date <= today, "the provided date needs to be in the past");
 
   let start = date - Duration::weeks(2);
+  let start = New_York
+    .ymd(start.year(), start.month(), start.day())
+    .and_hms(0, 0, 0)
+    .with_timezone(&Utc);
   let end = min(date + Duration::weeks(1), today);
+  let end = New_York
+    .ymd(end.year(), end.month(), end.day())
+    .and_hms(0, 0, 0)
+    .with_timezone(&Utc);
 
-  let request = bars::BarReq {
-    symbol: symbol.clone(),
-    limit: None,
-    start: New_York
-      .ymd(start.year(), start.month(), start.day())
-      .and_hms(0, 0, 0)
-      .with_timezone(&Utc),
-    end: New_York
-      .ymd(end.year(), end.month(), end.day())
-      .and_hms(0, 0, 0)
-      .with_timezone(&Utc),
-    timeframe: bars::TimeFrame::OneDay,
-    page_token: None,
+  let request = bars::BarsReqInit {
     adjustment: Some(bars::Adjustment::All),
-  };
+    ..Default::default()
+  }
+  .init(symbol.clone(), start, end, bars::TimeFrame::OneDay);
 
   let bars = client.issue::<bars::Get>(&request);
 
