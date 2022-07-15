@@ -4,6 +4,7 @@ Unreleased
 - Introduced `prices` sub-command for retrieving historic asset prices
 - Enabled CI pipeline for building, testing, and linting of the project
   - Added badge indicating pipeline status
+- Bumped minimum supported Rust version to `1.57`
 - Bumped `apca` dependency to `0.25`
 - Bumped `tracing-subscriber` dependency to `0.3`
 

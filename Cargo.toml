@@ -3,6 +3,7 @@ name = "apcaledge"
 version = "0.2.1"
 authors = ["Daniel Mueller <deso@posteo.net>"]
 edition = "2018"
+rust-version = "1.57"
 license = "GPL-3.0-or-later"
 homepage = "https://github.com/d-e-s-o/apcaledge"
 repository = "https://github.com/d-e-s-o/apcaledge.git"
