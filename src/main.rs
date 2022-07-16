@@ -1,7 +1,11 @@
 // Copyright (C) 2020-2022 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#![allow(clippy::let_and_return, clippy::too_many_arguments)]
+#![allow(
+  clippy::let_and_return,
+  clippy::let_unit_value,
+  clippy::too_many_arguments
+)]
 
 mod args;
 
@@ -650,7 +654,7 @@ where
       // that we do not insert we have to subtract one in order to get
       // the previous bar.
       if let Some(bar) = bars.get(index.saturating_sub(1)) {
-        &bar
+        bar
       } else {
         // The index does not exist, meaning that we are past the last
         // bar that we received. Just pick the last one then.
