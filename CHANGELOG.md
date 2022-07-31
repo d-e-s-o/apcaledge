@@ -2,10 +2,11 @@ Unreleased
 ----------
 - Moved functionality behind `activity` sub-command
 - Introduced `prices` sub-command for retrieving historic asset prices
+- Added rudimentary support for handling of stock splits
 - Enabled CI pipeline for building, testing, and linting of the project
   - Added badge indicating pipeline status
 - Bumped minimum supported Rust version to `1.57`
-- Bumped `apca` dependency to `0.25`
+- Bumped `apca` dependency to `0.25.1`
 - Bumped `tracing-subscriber` dependency to `0.3`
 
 

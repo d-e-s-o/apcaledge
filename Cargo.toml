@@ -27,7 +27,7 @@ incremental = false
 panic = "abort"
 
 [dependencies]
-apca = {version = "0.25", default-features = false}
+apca = {version = "0.25.1", default-features = false}
 anyhow = {version = "1.0", default-features = false, features = ["std"]}
 chrono = {version = "0.4", default-features = false}
 chrono-tz = {version = "0.6.1", default-features = false, features = ["std"]}

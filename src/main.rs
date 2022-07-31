@@ -312,6 +312,49 @@ fn print_non_trade(
         total = format_price(&non_trade.net_amount, currency),
       );
     },
+    account_activities::ActivityType::StockSplit => {
+      let symbol = non_trade
+        .symbol
+        .as_ref()
+        .ok_or_else(|| anyhow!("stock split entry does not have an associated symbol"))?;
+      let name = registry
+        .get(symbol)
+        .ok_or_else(|| anyhow!("symbol {} not present in registry", symbol))?;
+      let price = non_trade.price.as_ref().ok_or_else(|| {
+        anyhow!(
+          "stock split entry for {} does not have an associated price",
+          symbol
+        )
+      })?;
+      let quantity = non_trade.quantity.as_ref().ok_or_else(|| {
+        anyhow!(
+          "stock split entry for {} does not have an associated quantity",
+          symbol
+        )
+      })?;
+      let description = non_trade
+        .description
+        .as_ref()
+        .map(|description| format!("\n  ; {}", description).into())
+        .unwrap_or_else(|| Cow::from(""));
+
+      println!(
+        r#"{date} * {name}
+  ; Stock split{desc}
+  {from:<51}  {qty:>13} {symbol} @ {price}
+  {to:<51}    {total:>15}
+"#,
+        date = format_date(non_trade.date),
+        name = name,
+        desc = description,
+        symbol = symbol,
+        qty = quantity,
+        price = format_price(price, currency),
+        from = investment_account,
+        to = brokerage_account,
+        total = format_price(&(quantity * price), currency),
+      );
+    },
     _ => (),
   }
   Ok(())
