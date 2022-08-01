@@ -263,16 +263,18 @@ fn print_non_trade(
       );
     },
     account_activities::ActivityType::Fee => {
-      let (to, desc) = classify_fee(non_trade, sec_fee_account, finra_taf_account)?;
+      let (from, desc) = classify_fee(non_trade, sec_fee_account, finra_taf_account)?;
       println!(
         r#"{date} * {name}
   ; {desc}
-  {to:<51}    {total:>15}
+  {from:<51}    {total:>15}
+  {to}
 "#,
         date = format_date(non_trade.date),
         name = ALPACA,
         desc = desc,
-        to = to,
+        from = from,
+        to = brokerage_account,
         total = format_price(&-&non_trade.net_amount, currency),
       );
     },
