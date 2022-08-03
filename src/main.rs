@@ -85,6 +85,7 @@ static TAF_RE: Lazy<Regex> =
 //       representation like we do here.
 static REG_RE: Lazy<Regex> =
   Lazy::new(|| Regex::new(r"REG fee for proceed of \$(?P<proceeds>\d+\.\d+)").unwrap());
+static ADR_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^ADR FEES for").unwrap());
 static ACQ_PRICE_RE: Lazy<Regex> =
   Lazy::new(|| Regex::new(r"Cash Merger \$(?P<price>\d+\.\d+)").unwrap());
 
@@ -106,6 +107,7 @@ fn print_trade(
   fees: &[account_activities::NonTradeActivity],
   investment_account: &str,
   brokerage_account: &str,
+  brokerage_fee_account: &str,
   sec_fee_account: &str,
   finra_taf_account: &str,
   registry: &HashMap<String, String>,
@@ -135,7 +137,12 @@ fn print_trade(
   let mut total_fees = Num::from(0);
   for fee in fees {
     let net_amount = &-&fee.net_amount;
-    let (to, description) = classify_fee(fee, sec_fee_account, finra_taf_account)?;
+    let (to, description) = classify_fee(
+      fee,
+      brokerage_fee_account,
+      sec_fee_account,
+      finra_taf_account,
+    )?;
     println!(
       r#"  ; {desc}
   {to:<51}    {total:>15}"#,
@@ -162,6 +169,7 @@ fn print_trade(
 /// Classify a non-trade fee activity according to its description.
 fn classify_fee<'act, 'acc>(
   non_trade: &'act account_activities::NonTradeActivity,
+  brokerage_fee_account: &'acc str,
   sec_fee_account: &'acc str,
   finra_taf_account: &'acc str,
 ) -> Result<(&'acc str, &'act str)> {
@@ -172,6 +180,8 @@ fn classify_fee<'act, 'acc>(
       Ok((finra_taf_account, description))
     } else if REG_RE.is_match(description) {
       Ok((sec_fee_account, description))
+    } else if ADR_RE.find(description).is_some() {
+      Ok((brokerage_fee_account, description))
     } else {
       bail!(
         "failed to classify fee account activity with description: {}",
@@ -263,7 +273,12 @@ fn print_non_trade(
       );
     },
     account_activities::ActivityType::Fee => {
-      let (from, desc) = classify_fee(non_trade, sec_fee_account, finra_taf_account)?;
+      let (from, desc) = classify_fee(
+        non_trade,
+        brokerage_fee_account,
+        sec_fee_account,
+        finra_taf_account,
+      )?;
       println!(
         r#"{date} * {name}
   ; {desc}
@@ -525,6 +540,11 @@ fn associate_fees_with_trades(
               format!("failed to parse proceeds string '{}' as number", proceeds)
             })?;
             (None, Some(proceeds))
+          } else if ADR_RE.find(description).is_some() {
+            // ADR fees aren't associated with a trade, so just skip it
+            // here.
+            i += 1;
+            continue 'outer
           } else {
             bail!("description string could not be parsed: {}", description)
           };
@@ -609,6 +629,7 @@ async fn activities_list(
           fees,
           investment_account,
           brokerage_account,
+          brokerage_fee_account,
           sec_fee_account,
           finra_taf_account,
           registry,

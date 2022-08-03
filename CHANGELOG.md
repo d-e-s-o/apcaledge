@@ -3,6 +3,7 @@ Unreleased
 - Moved functionality behind `activity` sub-command
 - Introduced `prices` sub-command for retrieving historic asset prices
 - Added rudimentary support for handling of stock splits
+- Added support for dealing with ADR fees
 - Fixed reporting of fees when using `--force-separate-fees` option
 - Enabled CI pipeline for building, testing, and linting of the project
   - Added badge indicating pipeline status
