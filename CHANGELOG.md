@@ -1,5 +1,5 @@
-Unreleased
-----------
+0.3.0
+-----
 - Moved functionality behind `activity` sub-command
 - Introduced `prices` sub-command for retrieving historic asset prices
 - Added rudimentary support for handling of stock splits
