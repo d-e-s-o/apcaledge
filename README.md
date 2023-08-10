@@ -1,4 +1,4 @@
-[![pipeline](https://github.com/d-e-s-o/apcaledge/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/d-e-s-o/apcaledge/actions/workflows/ci.yml)
+[![pipeline](https://github.com/d-e-s-o/apcaledge/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/d-e-s-o/apcaledge/actions/workflows/test.yml)
 [![crates.io](https://img.shields.io/crates/v/apcaledge.svg)](https://crates.io/crates/apcaledge)
 [![rustc](https://img.shields.io/badge/rustc-1.57+-blue.svg)](https://blog.rust-lang.org/2021/12/02/Rust-1.57.0.html)
 
