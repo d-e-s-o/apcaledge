@@ -1,4 +1,4 @@
-// Copyright (C) 2020-2022 Daniel Mueller <deso@posteo.net>
+// Copyright (C) 2020-2023 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #![allow(
@@ -85,7 +85,7 @@ static TAF_RE: Lazy<Regex> =
 //       representation like we do here.
 static REG_RE: Lazy<Regex> =
   Lazy::new(|| Regex::new(r"REG fee for proceed of \$(?P<proceeds>\d+\.\d+)").unwrap());
-static ADR_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^ADR FEES for").unwrap());
+static ADR_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^ADR Fees").unwrap());
 static ACQ_PRICE_RE: Lazy<Regex> =
   Lazy::new(|| Regex::new(r"Cash Merger \$(?P<price>\d+\.\d+)").unwrap());
 

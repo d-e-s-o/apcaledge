@@ -1,3 +1,8 @@
+Unreleased
+----------
+- Adjusted ADR fee string to match changed reporting format
+
+
 0.3.0
 -----
 - Moved functionality behind `activity` sub-command
