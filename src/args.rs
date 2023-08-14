@@ -1,4 +1,4 @@
-// Copyright (C) 2022 Daniel Mueller <deso@posteo.net>
+// Copyright (C) 2022-2023 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::fmt::Display;
@@ -84,7 +84,7 @@ pub struct Date(pub NaiveDate);
 
 impl Default for Date {
   fn default() -> Self {
-    Self(Local::today().naive_local())
+    Self(Local::now().date_naive())
   }
 }
 

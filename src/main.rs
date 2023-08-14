@@ -99,7 +99,7 @@ fn format_price(price: &Num, currency: &str) -> String {
 
 /// Format a date time as a date.
 fn format_date(time: DateTime<Utc>) -> String {
-  time.date().format("%Y-%m-%d").to_string()
+  time.date_naive().format("%Y-%m-%d").to_string()
 }
 
 fn print_trade(
@@ -393,8 +393,8 @@ async fn activites_for_a_day(
       // If we have a last element we must have a first one, so it's
       // fine to unwrap.
       let first = activities.front().unwrap();
-      let start = first.time().date();
-      let end = last.time().date();
+      let start = first.time().date_naive();
+      let end = last.time().date_naive();
 
       if start != end {
         // The date changed between the first and the last activity,
@@ -402,7 +402,7 @@ async fn activites_for_a_day(
         // such, report the activities collected so far.
         let (same_day, other_day) = activities
           .into_iter()
-          .partition(|activity| activity.time().date() == start);
+          .partition(|activity| activity.time().date_naive() == start);
 
         break Ok((request, same_day, other_day))
       }
@@ -592,7 +592,7 @@ async fn activities_list(
   let mut unprocessed = VecDeque::new();
   let mut request = account_activities::ActivityReq {
     direction: account_activities::Direction::Ascending,
-    after: begin.map(|begin| DateTime::from_utc(begin.and_hms(0, 0, 0), Utc)),
+    after: begin.map(|begin| DateTime::from_utc(begin.and_hms_opt(0, 0, 0).unwrap(), Utc)),
     ..Default::default()
   };
 
@@ -663,18 +663,18 @@ async fn price_get<F>(
 where
   F: Future<Output = Result<clock::Clock, Arc<RequestError<clock::GetError>>>>,
 {
-  let today = Local::today().naive_local();
+  let today = Local::now().date_naive();
   ensure!(date <= today, "the provided date needs to be in the past");
 
   let start = date - Duration::weeks(2);
   let start = New_York
-    .ymd(start.year(), start.month(), start.day())
-    .and_hms(0, 0, 0)
+    .with_ymd_and_hms(start.year(), start.month(), start.day(), 0, 0, 0)
+    .unwrap()
     .with_timezone(&Utc);
   let end = min(date + Duration::weeks(1), today);
   let end = New_York
-    .ymd(end.year(), end.month(), end.day())
-    .and_hms(0, 0, 0)
+    .with_ymd_and_hms(end.year(), end.month(), end.day(), 0, 0, 0)
+    .unwrap()
     .with_timezone(&Utc);
 
   let request = bars::BarsReqInit {
@@ -702,15 +702,15 @@ where
   bars.sort_unstable_by_key(key_fn);
 
   let mut utc_date = New_York
-    .ymd(date.year(), date.month(), date.day())
-    .and_hms(0, 0, 0)
+    .with_ymd_and_hms(date.year(), date.month(), date.day(), 0, 0, 0)
+    .unwrap()
     .with_timezone(&Utc);
 
   // If the market is currently open (or opens later today) then we are
   // interested in yesterday's date. The reason being that Alpaca
   // would report bars for the ongoing day, and those will change until
   // we reached the end of the trading day.
-  if clock.open || clock.next_open.date() == utc_date.date() {
+  if clock.open || clock.next_open.date_naive() == utc_date.date_naive() {
     utc_date = utc_date - Duration::days(1);
   }
 
@@ -736,8 +736,7 @@ where
     "P {date} 23:59:59 {sym} USD {price}",
     date = New_York
       .from_utc_datetime(&bar.time.naive_utc())
-      .date()
-      .naive_local(),
+      .date_naive(),
     sym = symbol,
     price = bar.close.display().min_precision(2),
   );
