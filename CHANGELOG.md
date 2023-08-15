@@ -1,6 +1,7 @@
 Unreleased
 ----------
 - Adjusted ADR fee string to match changed reporting format
+- Bumped minimum supported Rust version to `1.59`
 
 
 0.3.0
