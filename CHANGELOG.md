@@ -2,7 +2,7 @@ Unreleased
 ----------
 - Adjusted ADR fee string to match changed reporting format
 - Bumped minimum supported Rust version to `1.59`
-- Bumped `apca` dependency to `0.26.0`
+- Bumped `apca` dependency to `0.27.0`
 
 
 0.3.0
