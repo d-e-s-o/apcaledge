@@ -1,6 +1,7 @@
 Unreleased
 ----------
 - Adjusted ADR fee string to match changed reporting format
+- Added GitHub Actions workflow for publishing the crate
 - Bumped minimum supported Rust version to `1.59`
 - Bumped `apca` dependency to `0.27.0`
 
