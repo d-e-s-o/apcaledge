@@ -1,5 +1,5 @@
-Unreleased
-----------
+0.3.1
+-----
 - Adjusted ADR fee string to match changed reporting format
 - Added GitHub Actions workflow for publishing the crate
 - Bumped minimum supported Rust version to `1.59`
