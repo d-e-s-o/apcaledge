@@ -592,7 +592,7 @@ async fn activities_list(
   let mut unprocessed = VecDeque::new();
   let mut request = account_activities::ActivityReq {
     direction: account_activities::Direction::Ascending,
-    after: begin.map(|begin| DateTime::from_utc(begin.and_hms_opt(0, 0, 0).unwrap(), Utc)),
+    after: begin.map(|begin| Utc.from_utc_datetime(&begin.and_hms_opt(0, 0, 0).unwrap())),
     ..Default::default()
   };
 
