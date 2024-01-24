@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::fs::File;
 use std::future::Future;
+use std::io::stderr;
 use std::io::stdout;
 use std::io::Write;
 use std::process::exit;
@@ -66,6 +67,7 @@ use structopt::StructOpt as _;
 use tokio::runtime::Builder;
 
 use tracing::subscriber::set_global_default as set_global_subscriber;
+use tracing::warn;
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::fmt::time::SystemTime;
 use tracing_subscriber::FmtSubscriber;
@@ -372,7 +374,7 @@ fn print_non_trade(
         total = format_price(&(quantity * price), currency),
       );
     },
-    _ => (),
+    _ => warn!("ignoring unsupported non-trade activity type: {non_trade:#?}"),
   }
   Ok(())
 }
@@ -772,6 +774,7 @@ async fn run() -> Result<()> {
   };
 
   let subscriber = FmtSubscriber::builder()
+    .with_writer(stderr)
     .with_max_level(level)
     .with_timer(SystemTime)
     .finish();
