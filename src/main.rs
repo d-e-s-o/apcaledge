@@ -47,6 +47,7 @@ use chrono::Utc;
 use chrono_tz::America::New_York;
 
 use futures::future::join;
+use futures::future::ready;
 use futures::future::Shared;
 use futures::stream::iter;
 use futures::FutureExt as _;
@@ -758,7 +759,7 @@ async fn prices_get(client: &Client, symbols: Vec<String>, date: NaiveDate) -> R
     .map(Ok)
     .map_ok(|symbol| price_get(client, symbol, date, clock.clone()))
     .try_buffer_unordered(32)
-    .fold(Ok(()), |agg, result| async move { result.and(agg) })
+    .try_for_each(|()| ready(Ok(())))
     .await?;
   Ok(())
 }
