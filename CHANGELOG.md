@@ -1,3 +1,8 @@
+Unreleased
+----------
+- Added support for interest and cash withdrawal non-trade activities
+
+
 0.3.1
 -----
 - Adjusted ADR fee string to match changed reporting format

@@ -234,6 +234,41 @@ fn print_non_trade(
   currency: &str,
 ) -> Result<()> {
   match non_trade.type_ {
+    account_activities::ActivityType::CashWithdrawal => {
+      let desc = non_trade
+        .description
+        .as_ref()
+        .map(|desc| format!("\n  ; {}", desc).into())
+        .unwrap_or_else(|| Cow::from(""));
+
+      println!(
+        r#"{date} * Transfer{desc}
+  {from:<51}    {total:>15}
+  XXX
+"#,
+        date = format_date(non_trade.date),
+        from = brokerage_account,
+        total = format_price(&non_trade.net_amount, currency),
+      );
+    },
+    account_activities::ActivityType::Interest => {
+      let desc = non_trade
+        .description
+        .as_ref()
+        .map(|desc| format!("\n  ; {}", desc).into())
+        .unwrap_or_else(|| Cow::from(""));
+
+      println!(
+        r#"{date} * {name}{desc}
+  Income:Interest
+  {to:<51}    {total:>15}
+"#,
+        date = format_date(non_trade.date),
+        name = ALPACA,
+        to = brokerage_account,
+        total = format_price(&non_trade.net_amount, currency),
+      );
+    },
     account_activities::ActivityType::Dividend => {
       let symbol = non_trade
         .symbol
