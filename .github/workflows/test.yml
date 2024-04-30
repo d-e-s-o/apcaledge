@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2023 Daniel Mueller <deso@posteo.net>
+# Copyright (C) 2022-2024 Daniel Mueller <deso@posteo.net>
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 name: Test
@@ -50,7 +50,7 @@ jobs:
         with:
           # Please adjust README and rust-version field in Cargo.toml files when
           # bumping version.
-          toolchain: 1.59.0
+          toolchain: 1.63
       - name: Build
         run: cargo build --locked
   clippy:
