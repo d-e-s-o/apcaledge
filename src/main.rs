@@ -1,4 +1,4 @@
-// Copyright (C) 2020-2023 Daniel Mueller <deso@posteo.net>
+// Copyright (C) 2020-2024 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #![allow(
@@ -790,11 +790,14 @@ async fn prices_get(client: &Client, symbols: Vec<String>, date: NaiveDate) -> R
   // the future.
   let clock = client.issue::<clock::Get>(&()).map_err(Arc::new).shared();
 
+  #[allow(clippy::manual_try_fold)]
   let () = iter(symbols)
     .map(Ok)
     .map_ok(|symbol| price_get(client, symbol, date, clock.clone()))
     .try_buffer_unordered(32)
-    .try_for_each(|()| ready(Ok(())))
+    // We use `fold` here to make sure that we process all items, such
+    // that all successfully retrieved prices are printed.
+    .fold(Ok(()), |acc, result| ready(acc.and(result)))
     .await?;
   Ok(())
 }
