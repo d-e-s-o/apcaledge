@@ -1,6 +1,6 @@
 Unreleased
 ----------
-- Added support for interest and cash withdrawal non-trade activities
+- Added support for interest and cash transfer non-trade activities
 - Bumped minimum supported Rust version to `1.63`
 
 

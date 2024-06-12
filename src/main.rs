@@ -234,7 +234,8 @@ fn print_non_trade(
   currency: &str,
 ) -> Result<()> {
   match non_trade.type_ {
-    account_activities::ActivityType::CashWithdrawal => {
+    account_activities::ActivityType::CashDeposit
+    | account_activities::ActivityType::CashWithdrawal => {
       let desc = non_trade
         .description
         .as_ref()
