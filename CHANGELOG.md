@@ -2,7 +2,7 @@ Unreleased
 ----------
 - Added support for interest and cash transfer non-trade activities
 - Bumped minimum supported Rust version to `1.63`
-- Bumped `apca` dependency to `0.28.0`
+- Bumped `apca` dependency to `0.29.0`
 
 
 0.3.1

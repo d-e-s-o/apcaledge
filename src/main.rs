@@ -124,6 +124,7 @@ fn print_trade(
     account_activities::Side::Buy => 1,
     account_activities::Side::Sell => -1,
     account_activities::Side::ShortSell => -1,
+    _ => panic!("encountered unexpected trade side: {:?}", trade.side),
   };
 
   println!(
@@ -716,13 +717,13 @@ where
     .unwrap()
     .with_timezone(&Utc);
 
-  let request = bars::BarsReqInit {
+  let request = bars::ListReqInit {
     adjustment: Some(bars::Adjustment::All),
     ..Default::default()
   }
   .init(symbol.clone(), start, end, bars::TimeFrame::OneDay);
 
-  let bars = client.issue::<bars::Get>(&request);
+  let bars = client.issue::<bars::List>(&request);
 
   let (response1, response2) = join(bars, clock).await;
   let mut bars = response1
