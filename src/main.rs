@@ -1,4 +1,4 @@
-// Copyright (C) 2020-2024 Daniel Mueller <deso@posteo.net>
+// Copyright (C) 2020-2025 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #![allow(
@@ -217,7 +217,7 @@ fn extract_acquisition_share_price(
     .with_context(|| "acquisition non-trade activity description could not be parsed")?;
   let share_price = &captures["price"];
   let share_price = Num::from_str(share_price)
-    .with_context(|| format!("failed to parse price string '{}' as number", share_price))?;
+    .with_context(|| format!("failed to parse price string '{share_price}' as number"))?;
 
   Ok(share_price)
 }
@@ -240,7 +240,7 @@ fn print_non_trade(
       let desc = non_trade
         .description
         .as_ref()
-        .map(|desc| format!("\n  ; {}", desc).into())
+        .map(|desc| format!("\n  ; {desc}").into())
         .unwrap_or_else(|| Cow::from(""));
 
       println!(
@@ -257,7 +257,7 @@ fn print_non_trade(
       let desc = non_trade
         .description
         .as_ref()
-        .map(|desc| format!("\n  ; {}", desc).into())
+        .map(|desc| format!("\n  ; {desc}").into())
         .unwrap_or_else(|| Cow::from(""));
 
       println!(
@@ -296,7 +296,7 @@ fn print_non_trade(
       let desc = non_trade
         .description
         .as_ref()
-        .map(|desc| format!("\n  ; {}", desc).into())
+        .map(|desc| format!("\n  ; {desc}").into())
         .unwrap_or_else(|| Cow::from(""));
 
       println!(
@@ -392,7 +392,7 @@ fn print_non_trade(
       let description = non_trade
         .description
         .as_ref()
-        .map(|description| format!("\n  ; {}", description).into())
+        .map(|description| format!("\n  ; {description}").into())
         .unwrap_or_else(|| Cow::from(""));
 
       println!(
@@ -572,13 +572,12 @@ fn associate_fees_with_trades(
           let (shares, proceeds) = if let Some(captures) = TAF_RE.captures(description) {
             let shares = &captures["shares"];
             let shares = Num::from_str(shares)
-              .with_context(|| format!("failed to parse shares string '{}' as number", shares))?;
+              .with_context(|| format!("failed to parse shares string '{shares}' as number"))?;
             (Some(shares), None)
           } else if let Some(captures) = REG_RE.captures(description) {
             let proceeds = &captures["proceeds"];
-            let proceeds = Num::from_str(proceeds).with_context(|| {
-              format!("failed to parse proceeds string '{}' as number", proceeds)
-            })?;
+            let proceeds = Num::from_str(proceeds)
+              .with_context(|| format!("failed to parse proceeds string '{proceeds}' as number"))?;
             (None, Some(proceeds))
           } else if ADR_RE.find(description).is_some() {
             // ADR fees aren't associated with a trade, so just skip it
@@ -727,12 +726,7 @@ where
 
   let (response1, response2) = join(bars, clock).await;
   let mut bars = response1
-    .with_context(|| {
-      format!(
-        "failed to retrieve historical aggregate bars for {}",
-        symbol
-      )
-    })?
+    .with_context(|| format!("failed to retrieve historical aggregate bars for {symbol}"))?
     .bars;
   let clock = response2.context("failed to retrieve current market clock")?;
 
@@ -858,8 +852,8 @@ fn main() {
     .block_on(run())
     .map(|_| 0)
     .map_err(|e| {
-      eprint!("{}", e);
-      e.chain().skip(1).for_each(|cause| eprint!(": {}", cause));
+      eprint!("{e}");
+      e.chain().skip(1).for_each(|cause| eprint!(": {cause}"));
       eprintln!();
     })
     .unwrap_or(1);
